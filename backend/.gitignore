@@ -1,4 +1,44 @@
-venv/
-__pycache__/
+# Python
 *.pyc
-db.sqlite3
+*.pyo
+*.pyd
+__pycache__/
+*.log
+*.sqlite3
+
+# Virtual environment
+venv/
+.venv/
+env/
+
+# Django
+media/
+static_root/
+staticfiles/
+*.pot
+*.mo
+
+# Environment / Secrets
+.env
+.env.local
+.env.*.local
+
+# IDE / Editor files
+.vscode/
+.idea/
+*.sublime-project
+*.sublime-workspace
+
+# OS files
+.DS_Store
+Thumbs.db
+Desktop.ini
+
+# Database backups / local dev DBs
+agriflow_db
+*.bak
+
+# Node / Frontend (if you ever add npm/yarn)
+node_modules/
+dist/
+build/
