@@ -1,5 +1,6 @@
 # Python
 *.pyc
+<<<<<<< HEAD
 *.pyo
 *.pyd
 __pycache__/
@@ -42,3 +43,6 @@ agriflow_db
 node_modules/
 dist/
 build/
+=======
+agriflow_ab
+>>>>>>> 68c94a2 (chore: add full .gitignore for backend)
