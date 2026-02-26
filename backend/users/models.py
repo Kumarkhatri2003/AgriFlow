@@ -25,16 +25,12 @@ class User(AbstractUser):
     reset_password_token = models.CharField(max_length=255, blank=True, null=True)
     reset_password_expires = models.DateTimeField(null=True, blank=True)
 
-    
-    #profile info 
-    phone = models.CharField(max_length=15,blank=True)
-    location = models.CharField(max_length=100, blank= True)
 
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 
     USERNAME_FIELD = 'email'
-    REQUIRED_FIELDS = []
+    REQUIRED_FIELDS = ['username']
 
     def __str__(self):
         return self.email
