@@ -36,6 +36,7 @@ INSTALLED_APPS = [
 
     #ourown
     'users',
+    'crops',
 ]
 
 MIDDLEWARE = [
