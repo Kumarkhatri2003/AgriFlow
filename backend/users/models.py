@@ -25,6 +25,7 @@ class User(AbstractUser):
     reset_password_token = models.CharField(max_length=255, blank=True, null=True)
     reset_password_expires = models.DateTimeField(null=True, blank=True)
 
+    
 
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
