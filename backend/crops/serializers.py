@@ -1,7 +1,7 @@
 from rest_framework import serializers
-from .models import Crop
+from .models import Crop,FertilizerRecord,PesticideRecord
 
-
+#--------Crop Serializer----------------    
 class CropSerializer(serializers.ModelSerializer):
     """serializer for crop model"""
 
@@ -29,3 +29,67 @@ class CropSerializer(serializers.ModelSerializer):
         ]
 
         read_only_fields = ['id','created_at','farmer']
+        
+
+
+#--------Fertilizer Serializer----------------    
+class FertilizerRecordSerializer(serializers.ModelSerializer):
+    """Serializer for fertilizer records"""
+    
+    #show human-readable names
+    fertilizer_type-display = serializers.CharField('get_fertilizer_type_display',read_only=True)
+    unit_display = serializers.CharField(source='get_unit_display',read_only=True)
+    
+    #crop name and user info
+    crop_name = serializers.CharField(source ='crop.name',read_only=True)
+    user_username = serializers.CharField(source ='user.username',read_only = True)
+    
+    class Meta:
+        model = FertilizerRecord
+        fields= [
+            'id', 'user', 'user_username', 'crop', 'crop_name',
+            'fertilizer_type', 'fertilizer_type_display', 'name',
+            'quantity', 'unit', 'unit_display', 'cost',
+            'application_date', 'notes', 'created_at'
+        ]
+        read_only_fields = ['id', 'user', 'created_at']
+        
+        def validate_quantity(self,value):
+            if value < 0:
+                raise serializers.ValidationError("Quantity cannot be negative")
+            return value
+        
+        def validate_cost(Self,value):
+            if value < 0:
+                raise serializers.ValidationError("Cost cannot be negative")
+            return value
+
+#--------Pesticide Serializer----------------    
+class PesticideRecordSerializer(serializers.ModelSerializer):
+    """Simple serializer for pesticide records"""
+    
+    unit_display = serializers.CharField(source='get_unit_display',read_only=True)
+    
+    
+    crop_name= serializers.CharField(source='crop.name',read_only=True)
+    
+    
+    class Meta:
+        model = PesticideRecord
+        fields =[
+            'id', 'user', 'user_username', 'crop', 'crop_name',
+            'name', 'target_pest',
+            'quantity', 'unit', 'unit_display', 'cost',
+            'application_date', 'notes', 'created_at'  
+        ]
+        
+        read_only_fields = ['id','user','created_at']
+        
+        def validate_quantity(self, value):
+           if value < 0:
+               raise serializers.ValidationError("Quantity cannot be negative")
+    
+        def validate_cost(self, value):
+            if value < 0:
+                raise serializers.ValidationError("Cost cannot be negative")
+            return value
