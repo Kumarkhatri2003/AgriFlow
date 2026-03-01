@@ -67,53 +67,59 @@ class Crop(models.Model):
 class FertilizerRecord(models.Model):
     """Track fertilizers applied to crops"""
     
+    # Use UUID for unique ID (optional, you can remove if you want simple auto-increment)
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    
+    # Who owns this record and which crop it belongs to
     user = models.ForeignKey(User, on_delete=models.CASCADE, related_name='fertilizer_records')
+    crop = models.ForeignKey(Crop, on_delete=models.CASCADE, related_name='fertilizers')
     
-    
-    #crop information
-    crop = models.ForeignKey(Crop, on_delete= models.CASCADE, related_name='fertilizers')
+    # Basic fertilizer info
     FERTILIZER_TYPES = [
-        ('chemical','Chemical'),
-        ('organic','Organic'),
-        ('bio','Bio-fertilizer'),
+        ('chemical', 'Chemical'),
+        ('organic', 'Organic'),
+        ('bio', 'Bio-fertilizer'),
     ]
+    fertilizer_type = models.CharField(max_length=50, choices=FERTILIZER_TYPES, default='chemical')
+    name = models.CharField(max_length=255)
     
-    fertilizer_type = models.CharField(max_length=50, choices=FERTILIZER_TYPES,default='chemical')
-    
-    quantity = models.DecimalField(max_digits=10,decimal_places=2,default=0)
+    # Quantity and cost
+    quantity = models.DecimalField(max_digits=10, decimal_places=2, default=0)
     UNIT_CHOICES = [
         ('kg', 'Kilograms'),
         ('g', 'Grams'),
         ('l', 'Liters'),
         ('ml', 'Milliliters'),
     ]
-    unit = models.CharField(max_length=20,choices=UNIT_CHOICES,default='kg')
+    unit = models.CharField(max_length=20, choices=UNIT_CHOICES, default='kg')
     cost = models.DecimalField(max_digits=12, decimal_places=2, default=0)
     
-    application_date= models.DateField(null=True, blank=True)
+    # When it was applied
+    application_date = models.DateField(null=True, blank=True)
     
+    # Extra notes
     notes = models.TextField(blank=True)
     
+    # Auto timestamps
     created_at = models.DateTimeField(auto_now_add=True)
     
     def __str__(self):
-        return f"{self.name}-{self.quantity}{self.unit}"
-    
+        return f"{self.name} - {self.quantity}{self.unit}"
+
 
 class PesticideRecord(models.Model):
     """Track pesticides applied to crops"""
     
-    id = models.UUIDField(primary_key=True, default=uuid.uuid4,editable=False)
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     
-    user = models.ForeignKey(User, on_delete=models.CASCADE,related_name='pesticide_records')
-    crop = models.ForeignKey(Crop,on_delete=models.CASCADE,related_name='pesticides')
+    user = models.ForeignKey(User, on_delete=models.CASCADE, related_name='pesticide_records')
+    crop = models.ForeignKey(Crop, on_delete=models.CASCADE, related_name='pesticides')
     
-    #Pesticide information
+    # Pesticide info
     name = models.CharField(max_length=255)
-    target_pest = models.CharField(max_length=255, blank=True)
+    target_pest = models.CharField(max_length=255, blank=True)  # What pest you're targeting
     
-    #quantity and cost information
+    # Quantity and cost
     quantity = models.DecimalField(max_digits=10, decimal_places=2, default=0)
     UNIT_CHOICES = [
         ('ml', 'Milliliters'),
@@ -121,30 +127,18 @@ class PesticideRecord(models.Model):
         ('g', 'Grams'),
         ('kg', 'Kilograms'),
     ]
-    
     unit = models.CharField(max_length=20, choices=UNIT_CHOICES, default='ml')
     cost = models.DecimalField(max_digits=12, decimal_places=2, default=0)
     
-    application_date = models.DateField(null=True,blank=True)
+    # When it was applied
+    application_date = models.DateField(null=True, blank=True)
     
-    
-    notes =models.TextField(blank=True)
+    # Extra notes
+    notes = models.TextField(blank=True)
     
     created_at = models.DateTimeField(auto_now_add=True)
-    
     
     def __str__(self):
         if self.target_pest:
             return f"{self.name} (for {self.target_pest})"
         return self.name
-    
-    
-
-    
-    
-    
-
-   
-    
-
-
