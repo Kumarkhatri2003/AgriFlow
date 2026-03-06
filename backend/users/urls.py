@@ -10,4 +10,10 @@ urlpatterns = [
     path('resend-verification/', views.ResendVerificationView.as_view(), name='resend-verification'),
     path('password-reset-request/', views.PasswordResetRequestView.as_view(), name='password-reset-request'),
     path('password-reset-confirm/', views.PasswordResetConfirmView.as_view(), name='password-reset-confirm'),
+    
+    # Protected endpoints 
+    path('profile/', views.ProfileView.as_view(), name='profile'),
+    path('change-password/', views.ChangePasswordView.as_view(), name='change-password'),
+    path('logout/', views.LogoutView.as_view(), name='logout'),
+    path('delete-account/', views.DeleteAccountView.as_view(), name='delete-account'),
 ]
