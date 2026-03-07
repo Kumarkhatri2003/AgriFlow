@@ -84,5 +84,64 @@ class Animal(models.Model):
             return f"{self.animal_type}-{self.name}({self.tag_number})"
         
         return f"{self.animal_type}-{self.tag_number}"
+    
+
+class VaccinationRecord(models.Model):
+    """Track vaccinations given to animals"""
+    
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    
+    animal = models.ForeignKey(Animal, on_delete=models.CASCADE, related_name='vaccinations')
+    
+    vaccine_name = models.CharField(max_length=255)
+    vaccine_date = models.DateField()
+    next_due_date = models.DateField(null=True, blank=True)
+    
+    administered_by = models.CharField(max_length=255, blank=True)
+    cost = models.DecimalField(max_digits=12, decimal_places=2, default=0)
+    
+    notes = models.TextField(blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    
+    class Meta:
+        ordering = ['-vaccine_date']
+    
+    def __str__(self):
+        return f"{self.vaccine_name} - {self.animal} on {self.vaccine_date}"
+
+
+class HealthRecord(models.Model):
+    """Track health issues, treatments, checkups"""
+    
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    
+    animal = models.ForeignKey(Animal, on_delete=models.CASCADE, related_name='health_records')
+    
+    HEALTH_TYPES = [
+        ('checkup', 'Regular Checkup'),
+        ('sick', 'Sickness'),
+        ('injury', 'Injury'),
+        ('treatment', 'Treatment'),
+        ('other', 'Other'),
+    ]
+    health_type = models.CharField(max_length=20, choices=HEALTH_TYPES, default='checkup')
+    
+    diagnosis = models.CharField(max_length=255)
+    treatment = models.TextField(blank=True)
+    treatment_date = models.DateField()
+    follow_up_date = models.DateField(null=True, blank=True)
+    
+    vet_name = models.CharField(max_length=255, blank=True)
+    cost = models.DecimalField(max_digits=12, decimal_places=2, default=0)
+    
+    notes = models.TextField(blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    
+    class Meta:
+        ordering = ['-treatment_date']
+    
+    def __str__(self):
+        return f"{self.get_health_type_display()} - {self.animal} on {self.treatment_date}"
+
 
     
