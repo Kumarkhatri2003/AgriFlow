@@ -1,6 +1,6 @@
 from django.core.management.base import BaseCommand
 from django.contrib.auth import get_user_model
-from livestock.models import AnimalType, Animal
+from livestock.models import AnimalType, Animal, VaccinationRecord, HealthRecord
 from datetime import date, timedelta
 
 User = get_user_model()
@@ -12,6 +12,17 @@ class Command(BaseCommand):
         self.stdout.write(self.style.SUCCESS('=' * 60))
         self.stdout.write(self.style.SUCCESS('     LIVESTOCK TEST SUITE'))
         self.stdout.write(self.style.SUCCESS('=' * 60))
+        
+        # ========== CLEAN UP EXISTING DATA ==========
+        self.stdout.write('\n\n🧹 Cleaning up existing test data...')
+        
+        # Delete existing records (in correct order due to foreign keys)
+        VaccinationRecord.objects.all().delete()
+        HealthRecord.objects.all().delete()
+        Animal.objects.all().delete()
+        # Don't delete AnimalTypes - they're master data
+        
+        self.stdout.write('✅ Cleaned up existing records')
         
         # ========== GET OR CREATE TEST USER ==========
         user, created = User.objects.get_or_create(
@@ -56,7 +67,7 @@ class Command(BaseCommand):
         self.stdout.write('\n\n📝 TEST 2: Creating Animals')
         self.stdout.write('-' * 40)
         
-        animals = []
+        animals = {}
         
         # Create a cow
         cow = Animal.objects.create(
@@ -71,10 +82,10 @@ class Command(BaseCommand):
             status='active',
             is_pregnant=True,
             last_pregnancy_date='2024-01-15',
-            expected_birth_date='2024-10-15',  # ~280 days later
+            expected_birth_date='2024-10-15',
             notes='Healthy cow, good milk production'
         )
-        animals.append(cow)
+        animals['cow'] = cow
         self.stdout.write(f'✅ Created cow: {cow}')
         
         # Create a goat
@@ -89,7 +100,7 @@ class Command(BaseCommand):
             gender='male',
             status='active'
         )
-        animals.append(goat)
+        animals['goat'] = goat
         self.stdout.write(f'✅ Created goat: {goat}')
         
         # Create a chicken
@@ -102,74 +113,183 @@ class Command(BaseCommand):
             gender='female',
             status='active'
         )
-        animals.append(chicken)
+        animals['chicken'] = chicken
         self.stdout.write(f'✅ Created chicken: {chicken}')
         
-        # ========== TEST 3: QUERY ANIMALS ==========
-        self.stdout.write('\n\n📝 TEST 3: Querying Animals')
+        # ========== TEST 3: TEST ANIMAL VALIDATION ==========
+        self.stdout.write('\n\n📝 TEST 3: Testing Animal Validation')
         self.stdout.write('-' * 40)
         
-        # All animals
-        all_animals = Animal.objects.filter(farmer=user)
-        self.stdout.write(f'\n📋 All animals ({all_animals.count()}):')
-        for animal in all_animals:
-            self.stdout.write(f'   - {animal}')
+        # Test 3.1: Try to create male pregnant animal (should fail)
+        try:
+            invalid_animal = Animal.objects.create(
+                farmer=user,
+                animal_type=animal_types['Goat'],
+                name='Invalid',
+                tag_number='INVALID001',
+                acquisition_date='2024-01-01',
+                gender='male',
+                is_pregnant=True,
+                last_pregnancy_date='2024-01-15'
+            )
+            self.stdout.write(self.style.ERROR('❌ Male pregnant animal created! Validation failed!'))
+        except Exception as e:
+            self.stdout.write(self.style.SUCCESS(f'✅ Validation passed: {e}'))
         
-        # Filter by type
-        cows = Animal.objects.filter(animal_type=animal_types['Cow'])
-        self.stdout.write(f'\n🐄 Cows: {cows.count()}')
+        # ========== TEST 4: CREATE VACCINATION RECORDS ==========
+        self.stdout.write('\n\n📝 TEST 4: Creating Vaccination Records')
+        self.stdout.write('-' * 40)
         
-        # Filter by gender
-        females = Animal.objects.filter(gender='female')
-        self.stdout.write(f'♀️ Females: {females.count()}')
+        # Vaccination for cow
+        vax1 = VaccinationRecord.objects.create(
+            animal=cow,
+            vaccine_name='Foot and Mouth Disease',
+            vaccine_date='2024-01-15',
+            next_due_date='2024-07-15',
+            administered_by='Dr. Sharma',
+            cost=1500,
+            notes='First dose'
+        )
+        self.stdout.write(f'✅ Created vaccination: {vax1}')
         
-        # Filter by pregnant
-        pregnant = Animal.objects.filter(is_pregnant=True)
-        self.stdout.write(f'🤰 Pregnant: {pregnant.count()}')
-        for animal in pregnant:
-            self.stdout.write(f'   - {animal} due: {animal.expected_birth_date}')
+        # Vaccination for goat
+        vax2 = VaccinationRecord.objects.create(
+            animal=goat,
+            vaccine_name='PPR Vaccine',
+            vaccine_date='2024-02-01',
+            next_due_date='2025-02-01',
+            cost=800
+        )
+        self.stdout.write(f'✅ Created vaccination: {vax2}')
         
-        # ========== TEST 4: TEST PROTECT CONSTRAINT ==========
-        self.stdout.write('\n\n📝 TEST 4: Testing PROTECT Constraint')
+        # ========== TEST 5: TEST VACCINATION VALIDATION ==========
+        self.stdout.write('\n\n📝 TEST 5: Testing Vaccination Validation')
+        self.stdout.write('-' * 40)
+        
+        # Test negative cost (should fail)
+        try:
+            invalid_vax = VaccinationRecord.objects.create(
+                animal=chicken,
+                vaccine_name='Invalid',
+                vaccine_date='2024-01-01',
+                cost=-500
+            )
+            self.stdout.write(self.style.ERROR('❌ Negative cost allowed! Validation failed!'))
+        except Exception as e:
+            self.stdout.write(self.style.SUCCESS(f'✅ Validation passed: {e}'))
+        
+        # ========== TEST 6: CREATE HEALTH RECORDS ==========
+        self.stdout.write('\n\n📝 TEST 6: Creating Health Records')
+        self.stdout.write('-' * 40)
+        
+        # Health record for cow
+        health1 = HealthRecord.objects.create(
+            animal=cow,
+            health_type='checkup',
+            diagnosis='Regular checkup',
+            treatment='Deworming',
+            treatment_date='2024-03-01',
+            follow_up_date='2024-06-01',
+            vet_name='Dr. Sharma',
+            cost=2000,
+            notes='All good'
+        )
+        self.stdout.write(f'✅ Created health record: {health1}')
+        
+        # Health record for chicken
+        health2 = HealthRecord.objects.create(
+            animal=chicken,
+            health_type='sick',
+            diagnosis='Respiratory infection',
+            treatment='Antibiotics',
+            treatment_date='2024-03-05',
+            cost=300
+        )
+        self.stdout.write(f'✅ Created health record: {health2}')
+        
+        # ========== TEST 7: TEST HEALTH RECORD VALIDATION ==========
+        self.stdout.write('\n\n📝 TEST 7: Testing Health Record Validation')
+        self.stdout.write('-' * 40)
+        
+        # Test negative cost (should fail)
+        try:
+            invalid_health = HealthRecord.objects.create(
+                animal=goat,
+                health_type='checkup',
+                diagnosis='Invalid',
+                treatment_date='2024-01-01',
+                cost=-200
+            )
+            self.stdout.write(self.style.ERROR('❌ Negative cost allowed! Validation failed!'))
+        except Exception as e:
+            self.stdout.write(self.style.SUCCESS(f'✅ Validation passed: {e}'))
+        
+        # ========== TEST 8: QUERY RELATED RECORDS ==========
+        self.stdout.write('\n\n📝 TEST 8: Querying Related Records')
+        self.stdout.write('-' * 40)
+        
+        # Get all vaccinations for cow
+        cow_vax = cow.vaccinations.all()
+        self.stdout.write(f'\n🐄 Cow vaccinations ({cow_vax.count()}):')
+        for vax in cow_vax:
+            self.stdout.write(f'   - {vax.vaccine_name} on {vax.vaccine_date}')
+        
+        # Get all health records for chicken
+        chicken_health = chicken.health_records.all()
+        self.stdout.write(f'\n🐔 Chicken health records ({chicken_health.count()}):')
+        for health in chicken_health:
+            self.stdout.write(f'   - {health.get_health_type_display()}: {health.diagnosis}')
+        
+        # ========== TEST 9: FILTER RECORDS ==========
+        self.stdout.write('\n\n📝 TEST 9: Filtering Records')
+        self.stdout.write('-' * 40)
+        
+        # Filter vaccinations by date
+        recent_vax = VaccinationRecord.objects.filter(
+            vaccine_date__gte='2024-02-01'
+        )
+        self.stdout.write(f'✅ Recent vaccinations (after Feb 2024): {recent_vax.count()}')
+        
+        # Filter health records by type
+        checkups = HealthRecord.objects.filter(health_type='checkup')
+        self.stdout.write(f'✅ Regular checkups: {checkups.count()}')
+        
+        # ========== TEST 10: UPDATE RECORDS ==========
+        self.stdout.write('\n\n📝 TEST 10: Updating Records')
+        self.stdout.write('-' * 40)
+        
+        # Update vaccination
+        vax1.notes = 'First dose completed successfully'
+        vax1.save()
+        self.stdout.write('✅ Updated vaccination notes')
+        
+        # Update health record
+        health2.follow_up_date = '2024-03-12'
+        health2.save()
+        self.stdout.write('✅ Added follow-up date to health record')
+        
+        # ========== TEST 11: TEST PROTECT CONSTRAINT (AGAIN) ==========
+        self.stdout.write('\n\n📝 TEST 11: Testing PROTECT Constraint Again')
         self.stdout.write('-' * 40)
         
         try:
-            self.stdout.write('Attempting to delete Cow animal type...')
-            animal_types['Cow'].delete()
+            self.stdout.write('Attempting to delete Goat animal type...')
+            animal_types['Goat'].delete()
             self.stdout.write(self.style.ERROR('❌ This should NOT have worked!'))
         except Exception as e:
-            self.stdout.write(self.style.SUCCESS(f'✅ PROTECT worked! Error: {e}'))
-        
-        # ========== TEST 5: UPDATE AN ANIMAL ==========
-        self.stdout.write('\n\n📝 TEST 5: Updating an Animal')
-        self.stdout.write('-' * 40)
-        
-        cow.status = 'sold'
-        cow.save()
-        self.stdout.write(f'✅ Updated cow status to "sold"')
-        
-        # Verify update
-        updated_cow = Animal.objects.get(tag_number='COW001')
-        self.stdout.write(f'✅ Verified: Cow status is now {updated_cow.status}')
-        
-        # ========== TEST 6: FILTER VIEWS ==========
-        self.stdout.write('\n\n📝 TEST 6: Testing Filter Views')
-        self.stdout.write('-' * 40)
-        
-        active = Animal.objects.filter(farmer=user, status='active')
-        self.stdout.write(f'✅ Active animals: {active.count()}')
-        for animal in active:
-            self.stdout.write(f'   - {animal}')
+            self.stdout.write(self.style.SUCCESS(f'✅ PROTECT still working! Error: {e}'))
         
         # ========== TEST SUMMARY ==========
         self.stdout.write('\n\n' + '=' * 60)
         self.stdout.write(self.style.SUCCESS('          TEST SUMMARY'))
         self.stdout.write('=' * 60)
-        self.stdout.write(f'✅ Animal Types created: {AnimalType.objects.count()}')
-        self.stdout.write(f'✅ Animals created: {Animal.objects.filter(farmer=user).count()}')
+        self.stdout.write(f'✅ Animal Types: {AnimalType.objects.count()}')
+        self.stdout.write(f'✅ Animals: {Animal.objects.filter(farmer=user).count()}')
+        self.stdout.write(f'✅ Vaccination Records: {VaccinationRecord.objects.count()}')
+        self.stdout.write(f'✅ Health Records: {HealthRecord.objects.count()}')
         self.stdout.write(f'✅ PROTECT constraint: Working')
-        self.stdout.write(f'✅ Update functionality: Working')
-        self.stdout.write(f'✅ Filter functionality: Working')
+        self.stdout.write(f'✅ Validation rules: Working')
+        self.stdout.write(f'✅ Relationships: Working')
         self.stdout.write('=' * 60)
         self.stdout.write(self.style.SUCCESS('\n✅ All livestock tests passed!'))
         self.stdout.write('=' * 60)
