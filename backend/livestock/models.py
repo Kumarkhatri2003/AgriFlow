@@ -144,4 +144,61 @@ class HealthRecord(models.Model):
         return f"{self.get_health_type_display()} - {self.animal} on {self.treatment_date}"
 
 
+
+class MilkRecord(models.Model):
+    """Track milk production for dairy animals""" 
+    id = models.UUIDField(primary_key=True,default=uuid.uuid4, editable=False)
+    animal= models.ForeignKey(Animal, on_delete=models.CASCADE,related_name='milk_records')
     
+    date= models.DateField()
+    quantity_liters= models.DecimalField(max_digits=8,decimal_places=2)
+    
+    MILK_TIMES = [
+        ('morning','Morning'),
+        ('evening','Evening'),
+        ('total','Total Day'),
+    ]
+    
+    milk_time = models.CharField(max_length=20,choices=MILK_TIMES,default='total')
+    
+    notes = models.TextField(blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    
+    class Meta:
+        ordering =['-date']
+        unique_together = ['animal','date','milk_time']
+        
+    def __str__(self):
+        return f"{self.animal}-{self.quantity_liters}L on {self.date}"
+    
+    
+    
+class BreedingRecord(models.Model):
+    """Track breeding and pregnancies"""
+    
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    
+    animal = models.ForeignKey(Animal, on_delete=models.CASCADE, related_name='breeding_records')
+    
+    breeding_date = models.DateField()
+    successful = models.BooleanField(default=False)
+    
+    # If successful
+    expected_birth_date = models.DateField(null=True, blank=True)
+    actual_birth_date = models.DateField(null=True, blank=True)
+    offspring_count = models.IntegerField(default=0)
+    
+    # Sire (father) info
+    sire_animal = models.ForeignKey(Animal, on_delete=models.SET_NULL, null=True, blank=True, 
+                                     related_name='sired_offspring')
+    sire_name = models.CharField(max_length=255, blank=True)  # If sire not in system
+    
+    notes = models.TextField(blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    
+    class Meta:
+        ordering = ['-breeding_date']
+        unique_together = ['animal', 'breeding_date']
+    
+    def __str__(self):
+        return f"{self.animal} bred on {self.breeding_date}"
