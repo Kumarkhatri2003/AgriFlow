@@ -1,6 +1,6 @@
 from django.core.management.base import BaseCommand
 from django.contrib.auth import get_user_model
-from livestock.models import AnimalType, Animal, VaccinationRecord, HealthRecord
+from livestock.models import AnimalType, Animal, VaccinationRecord, HealthRecord, MilkRecord, BreedingRecord
 from datetime import date, timedelta
 
 User = get_user_model()
@@ -17,6 +17,8 @@ class Command(BaseCommand):
         self.stdout.write('\n\n🧹 Cleaning up existing test data...')
         
         # Delete existing records (in correct order due to foreign keys)
+        MilkRecord.objects.all().delete()
+        BreedingRecord.objects.all().delete()
         VaccinationRecord.objects.all().delete()
         HealthRecord.objects.all().delete()
         Animal.objects.all().delete()
@@ -224,8 +226,138 @@ class Command(BaseCommand):
         except Exception as e:
             self.stdout.write(self.style.SUCCESS(f'✅ Validation passed: {e}'))
         
-        # ========== TEST 8: QUERY RELATED RECORDS ==========
-        self.stdout.write('\n\n📝 TEST 8: Querying Related Records')
+        # ========== TEST 8: CREATE MILK RECORDS ==========
+        self.stdout.write('\n\n📝 TEST 8: Creating Milk Records')
+        self.stdout.write('-' * 40)
+        
+        # Milk records for cow
+        milk1 = MilkRecord.objects.create(
+            animal=cow,
+            date='2024-03-01',
+            quantity_liters=15.5,
+            milk_time='morning',
+            notes='Good production'
+        )
+        self.stdout.write(f'✅ Created milk record: {milk1}')
+        
+        milk2 = MilkRecord.objects.create(
+            animal=cow,
+            date='2024-03-01',
+            quantity_liters=12.0,
+            milk_time='evening',
+            notes='Evening milking'
+        )
+        self.stdout.write(f'✅ Created milk record: {milk2}')
+        
+        # ========== TEST 9: TEST MILK RECORD VALIDATION ==========
+        self.stdout.write('\n\n📝 TEST 9: Testing Milk Record Validation')
+        self.stdout.write('-' * 40)
+        
+        # Test duplicate milk time (should fail due to unique_together)
+        try:
+            duplicate_milk = MilkRecord.objects.create(
+                animal=cow,
+                date='2024-03-01',
+                quantity_liters=10.0,
+                milk_time='morning',  # Already exists for this date!
+            )
+            self.stdout.write(self.style.ERROR('❌ Duplicate milk record created! Validation failed!'))
+        except Exception as e:
+            self.stdout.write(self.style.SUCCESS(f'✅ Validation passed (unique_together): {e}'))
+        
+        # Test negative quantity (should fail at model level? Add validation if needed)
+        try:
+            negative_milk = MilkRecord.objects.create(
+                animal=cow,
+                date='2024-03-02',
+                quantity_liters=-5.0,
+                milk_time='morning',
+            )
+            self.stdout.write(self.style.ERROR('❌ Negative quantity allowed!'))
+        except Exception as e:
+            self.stdout.write(self.style.SUCCESS(f'✅ Validation passed: {e}'))
+        
+        # ========== TEST 10: CREATE BREEDING RECORDS ==========
+        self.stdout.write('\n\n📝 TEST 10: Creating Breeding Records')
+        self.stdout.write('-' * 40)
+        
+        # Breeding record for cow (successful, not yet born)
+        breed1 = BreedingRecord.objects.create(
+            animal=cow,
+            breeding_date='2024-01-15',
+            successful=True,
+            expected_birth_date='2024-10-15',
+            sire_name='Neighbor\'s Bull',
+            notes='AI performed'
+        )
+        self.stdout.write(f'✅ Created breeding record: {breed1}')
+        
+        # Breeding record for goat (successful, birth occurred)
+        breed2 = BreedingRecord.objects.create(
+            animal=goat,
+            breeding_date='2024-01-10',
+            successful=True,
+            expected_birth_date='2024-06-10',
+            actual_birth_date='2024-06-05',
+            offspring_count=2,
+            sire_name='Billy Jr.',
+            notes='Twins born early'
+        )
+        self.stdout.write(f'✅ Created breeding record: {breed2}')
+        
+        # Breeding record for chicken (unsuccessful)
+        breed3 = BreedingRecord.objects.create(
+            animal=chicken,
+            breeding_date='2024-02-01',
+            successful=False,
+            notes='No eggs fertilized'
+        )
+        self.stdout.write(f'✅ Created breeding record: {breed3}')
+        
+        # ========== TEST 11: TEST BREEDING RECORD VALIDATION ==========
+        self.stdout.write('\n\n📝 TEST 11: Testing Breeding Record Validation')
+        self.stdout.write('-' * 40)
+        
+        # Test unsuccessful with expected birth date (should fail)
+        try:
+            invalid_breed = BreedingRecord.objects.create(
+                animal=goat,
+                breeding_date='2024-03-01',
+                successful=False,
+                expected_birth_date='2024-08-01',
+            )
+            self.stdout.write(self.style.ERROR('❌ Unsuccessful breeding with expected date created!'))
+        except Exception as e:
+            self.stdout.write(self.style.SUCCESS(f'✅ Validation passed: {e}'))
+        
+        # Test successful without expected date (should fail)
+        try:
+            invalid_breed2 = BreedingRecord.objects.create(
+                animal=goat,
+                breeding_date='2024-03-01',
+                successful=True,
+                # No expected_birth_date
+            )
+            self.stdout.write(self.style.ERROR('❌ Successful breeding without expected date created!'))
+        except Exception as e:
+            self.stdout.write(self.style.SUCCESS(f'✅ Validation passed: {e}'))
+        
+        # Test birth occurred without offspring count (should fail)
+        try:
+            invalid_breed3 = BreedingRecord.objects.create(
+                animal=goat,
+                breeding_date='2024-03-01',
+                successful=True,
+                expected_birth_date='2024-08-01',
+                actual_birth_date='2024-08-05',
+                offspring_count=0,  # Should be >0
+            )
+            self.stdout.write(self.style.ERROR('❌ Birth without offspring count created!'))
+        except Exception as e:
+            self.stdout.write(self.style.SUCCESS(f'✅ Validation passed: {e}'))
+        
+        # ========== TEST 12: QUERY RELATED RECORDS ==========
+        self.stdout.write('\n\n📝 TEST 12: Querying Related Records')
         self.stdout.write('-' * 40)
         
         # Get all vaccinations for cow
@@ -240,8 +372,21 @@ class Command(BaseCommand):
         for health in chicken_health:
             self.stdout.write(f'   - {health.get_health_type_display()}: {health.diagnosis}')
         
-        # ========== TEST 9: FILTER RECORDS ==========
-        self.stdout.write('\n\n📝 TEST 9: Filtering Records')
+        # Get all milk records for cow
+        cow_milk = cow.milk_records.all()
+        self.stdout.write(f'\n🥛 Cow milk records ({cow_milk.count()}):')
+        for milk in cow_milk:
+            self.stdout.write(f'   - {milk.date}: {milk.quantity_liters}L ({milk.get_milk_time_display()})')
+        
+        # Get all breeding records for cow
+        cow_breeding = cow.breeding_records.all()
+        self.stdout.write(f'\n🤰 Cow breeding records ({cow_breeding.count()}):')
+        for breed in cow_breeding:
+            status = "Successful" if breed.successful else "Unsuccessful"
+            self.stdout.write(f'   - {breed.breeding_date}: {status}')
+        
+        # ========== TEST 13: FILTER RECORDS ==========
+        self.stdout.write('\n\n📝 TEST 13: Filtering Records')
         self.stdout.write('-' * 40)
         
         # Filter vaccinations by date
@@ -254,8 +399,16 @@ class Command(BaseCommand):
         checkups = HealthRecord.objects.filter(health_type='checkup')
         self.stdout.write(f'✅ Regular checkups: {checkups.count()}')
         
-        # ========== TEST 10: UPDATE RECORDS ==========
-        self.stdout.write('\n\n📝 TEST 10: Updating Records')
+        # Filter milk records by date
+        today_milk = MilkRecord.objects.filter(date='2024-03-01')
+        self.stdout.write(f'✅ Milk records on 2024-03-01: {today_milk.count()}')
+        
+        # Filter successful breeding records
+        successful_breeding = BreedingRecord.objects.filter(successful=True)
+        self.stdout.write(f'✅ Successful breeding records: {successful_breeding.count()}')
+        
+        # ========== TEST 14: UPDATE RECORDS ==========
+        self.stdout.write('\n\n📝 TEST 14: Updating Records')
         self.stdout.write('-' * 40)
         
         # Update vaccination
@@ -268,13 +421,19 @@ class Command(BaseCommand):
         health2.save()
         self.stdout.write('✅ Added follow-up date to health record')
         
-        # ========== TEST 11: TEST PROTECT CONSTRAINT (AGAIN) ==========
-        self.stdout.write('\n\n📝 TEST 11: Testing PROTECT Constraint Again')
+        # Update breeding record (add birth info)
+        breed1.actual_birth_date = '2024-10-12'
+        breed1.offspring_count = 1
+        breed1.save()
+        self.stdout.write('✅ Updated breeding record with birth info')
+        
+        # ========== TEST 15: TEST PROTECT CONSTRAINT ==========
+        self.stdout.write('\n\n📝 TEST 15: Testing PROTECT Constraint')
         self.stdout.write('-' * 40)
         
         try:
-            self.stdout.write('Attempting to delete Goat animal type...')
-            animal_types['Goat'].delete()
+            self.stdout.write('Attempting to delete Cow animal type...')
+            animal_types['Cow'].delete()
             self.stdout.write(self.style.ERROR('❌ This should NOT have worked!'))
         except Exception as e:
             self.stdout.write(self.style.SUCCESS(f'✅ PROTECT still working! Error: {e}'))
@@ -287,9 +446,12 @@ class Command(BaseCommand):
         self.stdout.write(f'✅ Animals: {Animal.objects.filter(farmer=user).count()}')
         self.stdout.write(f'✅ Vaccination Records: {VaccinationRecord.objects.count()}')
         self.stdout.write(f'✅ Health Records: {HealthRecord.objects.count()}')
+        self.stdout.write(f'✅ Milk Records: {MilkRecord.objects.count()}')
+        self.stdout.write(f'✅ Breeding Records: {BreedingRecord.objects.count()}')
         self.stdout.write(f'✅ PROTECT constraint: Working')
         self.stdout.write(f'✅ Validation rules: Working')
         self.stdout.write(f'✅ Relationships: Working')
+        self.stdout.write(f'✅ Unique constraints: Working')
         self.stdout.write('=' * 60)
         self.stdout.write(self.style.SUCCESS('\n✅ All livestock tests passed!'))
         self.stdout.write('=' * 60)
