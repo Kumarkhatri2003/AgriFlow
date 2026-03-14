@@ -31,9 +31,19 @@ urlpatterns = [
     path('breeding-records/', views.BreedingRecordListCreateView.as_view(), name='breeding-list'),
     path('breeding-records/<uuid:pk>/', views.BreedingRecordDetailView.as_view(), name='breeding-detail'),
     
+    # Animal Income URLs
+    path('incomes/', views.AnimalIncomeListCreateView.as_view(), name='income-list'),
+    path('incomes/<uuid:pk>/', views.AnimalIncomeDetailView.as_view(), name='income-detail'),
+    
+    # Animal Expense URLs
+    path('expenses/', views.AnimalExpenseListCreateView.as_view(), name='expense-list'),
+    path('expenses/<uuid:pk>/', views.AnimalExpenseDetailView.as_view(), name='expense-detail'),
+    
     # Nested URLs (under specific animal)
     path('animals/<uuid:animal_pk>/vaccinations/', views.AnimalVaccinationsView.as_view(), name='animal-vaccinations'),
     path('animals/<uuid:animal_pk>/health-records/', views.AnimalHealthRecordsView.as_view(), name='animal-health'),
     path('animals/<uuid:animal_pk>/milk-records/', views.AnimalMilkRecordsView.as_view(), name='animal-milk'),
     path('animals/<uuid:animal_pk>/breeding-records/', views.AnimalBreedingRecordsView.as_view(), name='animal-breeding'),
+    path('animals/<uuid:animal_pk>/incomes/', views.AnimalIncomesView.as_view(), name='animal-incomes'),
+    path('animals/<uuid:animal_pk>/expenses/', views.AnimalExpensesView.as_view(), name='animal-expenses'),
 ]
