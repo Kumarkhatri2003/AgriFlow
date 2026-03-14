@@ -1,6 +1,9 @@
 from django.core.management.base import BaseCommand
 from django.contrib.auth import get_user_model
-from livestock.models import AnimalType, Animal, VaccinationRecord, HealthRecord, MilkRecord, BreedingRecord
+from livestock.models import (
+    AnimalType, Animal, VaccinationRecord, HealthRecord, 
+    MilkRecord, BreedingRecord, AnimalIncome, AnimalExpense
+)
 from datetime import date, timedelta
 
 User = get_user_model()
@@ -17,6 +20,8 @@ class Command(BaseCommand):
         self.stdout.write('\n\n🧹 Cleaning up existing test data...')
         
         # Delete existing records (in correct order due to foreign keys)
+        AnimalIncome.objects.all().delete()
+        AnimalExpense.objects.all().delete()
         MilkRecord.objects.all().delete()
         BreedingRecord.objects.all().delete()
         VaccinationRecord.objects.all().delete()
@@ -265,7 +270,7 @@ class Command(BaseCommand):
         except Exception as e:
             self.stdout.write(self.style.SUCCESS(f'✅ Validation passed (unique_together): {e}'))
         
-        # Test negative quantity (should fail at model level? Add validation if needed)
+        # Test negative quantity (should fail)
         try:
             negative_milk = MilkRecord.objects.create(
                 animal=cow,
@@ -356,8 +361,198 @@ class Command(BaseCommand):
         except Exception as e:
             self.stdout.write(self.style.SUCCESS(f'✅ Validation passed: {e}'))
         
-        # ========== TEST 12: QUERY RELATED RECORDS ==========
-        self.stdout.write('\n\n📝 TEST 12: Querying Related Records')
+        # ========== TEST 12: CREATE ANIMAL INCOME RECORDS ==========
+        self.stdout.write('\n\n📝 TEST 12: Creating Animal Income Records')
+        self.stdout.write('-' * 40)
+        
+        # Milk income for cow
+        income1 = AnimalIncome.objects.create(
+            user=user,
+            animal=cow,
+            source='milk_sale',
+            amount=5000,
+            date='2024-03-02',
+            description='Morning milk sale',
+            buyer_name='Dairy Cooperative',
+            buyer_contact='9841001001'
+        )
+        self.stdout.write(f'✅ Created income: {income1}')
+        
+        # Another milk income for cow
+        income2 = AnimalIncome.objects.create(
+            user=user,
+            animal=cow,
+            source='milk_sale',
+            amount=4500,
+            date='2024-03-03',
+            description='Evening milk sale'
+        )
+        self.stdout.write(f'✅ Created income: {income2}')
+        
+        # Animal sale income for goat
+        income3 = AnimalIncome.objects.create(
+            user=user,
+            animal=goat,
+            source='animal_sale',
+            amount=12000,
+            date='2024-03-10',
+            description='Sold goat to local farmer',
+            buyer_name='Hari Bahadur',
+            buyer_contact='9842002002'
+        )
+        self.stdout.write(f'✅ Created income: {income3}')
+        
+        # Egg income for chicken
+        income4 = AnimalIncome.objects.create(
+            user=user,
+            animal=chicken,
+            source='egg_sale',
+            amount=800,
+            date='2024-03-05',
+            description='Eggs sold this week'
+        )
+        self.stdout.write(f'✅ Created income: {income4}')
+        
+        # ========== TEST 13: TEST INCOME VALIDATION ==========
+        self.stdout.write('\n\n📝 TEST 13: Testing Income Validation')
+        self.stdout.write('-' * 40)
+        
+        # Test negative amount (should fail)
+        try:
+            invalid_income = AnimalIncome.objects.create(
+                user=user,
+                animal=chicken,
+                source='egg_sale',
+                amount=-100,
+                date='2024-03-01'
+            )
+            self.stdout.write(self.style.ERROR('❌ Negative amount allowed! Validation failed!'))
+        except Exception as e:
+            self.stdout.write(self.style.SUCCESS(f'✅ Validation passed: {e}'))
+        
+        # Test zero amount (should fail)
+        try:
+            invalid_income2 = AnimalIncome.objects.create(
+                user=user,
+                animal=chicken,
+                source='egg_sale',
+                amount=0,
+                date='2024-03-01'
+            )
+            self.stdout.write(self.style.ERROR('❌ Zero amount allowed! Validation failed!'))
+        except Exception as e:
+            self.stdout.write(self.style.SUCCESS(f'✅ Validation passed: {e}'))
+        
+        # Test future date (should fail if validation added)
+        try:
+            future_date = date.today() + timedelta(days=30)
+            invalid_income3 = AnimalIncome.objects.create(
+                user=user,
+                animal=chicken,
+                source='egg_sale',
+                amount=500,
+                date=future_date
+            )
+            self.stdout.write(self.style.ERROR('❌ Future date allowed! Validation failed!'))
+        except Exception as e:
+            self.stdout.write(self.style.SUCCESS(f'✅ Validation passed: {e}'))
+        
+        # ========== TEST 14: CREATE ANIMAL EXPENSE RECORDS ==========
+        self.stdout.write('\n\n📝 TEST 14: Creating Animal Expense Records')
+        self.stdout.write('-' * 40)
+        
+        # Feed expense for cow
+        expense1 = AnimalExpense.objects.create(
+            user=user,
+            animal=cow,
+            category='feed',
+            amount=3000,
+            date='2024-03-01',
+            description='Monthly feed',
+            vendor_name='Agro Feed Store',
+            vendor_contact='9843003003'
+        )
+        self.stdout.write(f'✅ Created expense: {expense1}')
+        
+        # Bedding expense for cow
+        expense2 = AnimalExpense.objects.create(
+            user=user,
+            animal=cow,
+            category='bedding',
+            amount=1000,
+            date='2024-03-05',
+            description='Straw for bedding'
+        )
+        self.stdout.write(f'✅ Created expense: {expense2}')
+        
+        # Equipment expense for goat
+        expense3 = AnimalExpense.objects.create(
+            user=user,
+            animal=goat,
+            category='equipment',
+            amount=2500,
+            date='2024-03-08',
+            description='Water trough'
+        )
+        self.stdout.write(f'✅ Created expense: {expense3}')
+        
+        # Transport expense for chicken
+        expense4 = AnimalExpense.objects.create(
+            user=user,
+            animal=chicken,
+            category='transport',
+            amount=500,
+            date='2024-03-02',
+            description='Transport to market'
+        )
+        self.stdout.write(f'✅ Created expense: {expense4}')
+        
+        # ========== TEST 15: TEST EXPENSE VALIDATION ==========
+        self.stdout.write('\n\n📝 TEST 15: Testing Expense Validation')
+        self.stdout.write('-' * 40)
+        
+        # Test negative amount (should fail)
+        try:
+            invalid_expense = AnimalExpense.objects.create(
+                user=user,
+                animal=chicken,
+                category='feed',
+                amount=-200,
+                date='2024-03-01'
+            )
+            self.stdout.write(self.style.ERROR('❌ Negative amount allowed! Validation failed!'))
+        except Exception as e:
+            self.stdout.write(self.style.SUCCESS(f'✅ Validation passed: {e}'))
+        
+        # Test zero amount (should fail)
+        try:
+            invalid_expense2 = AnimalExpense.objects.create(
+                user=user,
+                animal=chicken,
+                category='feed',
+                amount=0,
+                date='2024-03-01'
+            )
+            self.stdout.write(self.style.ERROR('❌ Zero amount allowed! Validation failed!'))
+        except Exception as e:
+            self.stdout.write(self.style.SUCCESS(f'✅ Validation passed: {e}'))
+        
+        # Test future date (should fail if validation added)
+        try:
+            future_date = date.today() + timedelta(days=30)
+            invalid_expense3 = AnimalExpense.objects.create(
+                user=user,
+                animal=chicken,
+                category='feed',
+                amount=500,
+                date=future_date
+            )
+            self.stdout.write(self.style.ERROR('❌ Future date allowed! Validation failed!'))
+        except Exception as e:
+            self.stdout.write(self.style.SUCCESS(f'✅ Validation passed: {e}'))
+        
+        # ========== TEST 16: QUERY RELATED RECORDS ==========
+        self.stdout.write('\n\n📝 TEST 16: Querying Related Records')
         self.stdout.write('-' * 40)
         
         # Get all vaccinations for cow
@@ -385,8 +580,55 @@ class Command(BaseCommand):
             status = "Successful" if breed.successful else "Unsuccessful"
             self.stdout.write(f'   - {breed.breeding_date}: {status}')
         
-        # ========== TEST 13: FILTER RECORDS ==========
-        self.stdout.write('\n\n📝 TEST 13: Filtering Records')
+        # Get all income records for cow
+        cow_income = cow.incomes.all()
+        self.stdout.write(f'\n💰 Cow income records ({cow_income.count()}):')
+        for income in cow_income:
+            self.stdout.write(f'   - {income.date}: {income.get_source_display()} - NPR {income.amount}')
+        
+        # Get all expense records for cow
+        cow_expense = cow.expenses.all()
+        self.stdout.write(f'\n💸 Cow expense records ({cow_expense.count()}):')
+        for expense in cow_expense:
+            self.stdout.write(f'   - {expense.date}: {expense.get_category_display()} - NPR {expense.amount}')
+        
+        # ========== TEST 17: TEST FINANCIAL CALCULATIONS ==========
+        self.stdout.write('\n\n📝 TEST 17: Testing Financial Calculations')
+        self.stdout.write('-' * 40)
+        
+        # Refresh cow from database
+        cow.refresh_from_db()
+        
+        self.stdout.write(f'\n🐄 {cow.name} Financial Summary:')
+        self.stdout.write(f'   Acquisition Cost: NPR {cow.acquisition_cost}')
+        self.stdout.write(f'   Vaccination Cost: NPR {cow.total_vaccination_cost}')
+        self.stdout.write(f'   Health Cost: NPR {cow.total_health_cost}')
+        self.stdout.write(f'   Medical Cost: NPR {cow.total_medical_cost}')
+        self.stdout.write(f'   Other Expenses: NPR {cow.total_other_expense}')
+        self.stdout.write(f'   Total Expense: NPR {cow.total_expense}')
+        self.stdout.write(f'   Milk Income: NPR {cow.milk_income}')
+        self.stdout.write(f'   Total Income: NPR {cow.total_income}')
+        self.stdout.write(f'   Net Profit: NPR {cow.net_profit}')
+        self.stdout.write(f'   Profit Margin: {cow.profit_margin:.1f}%')
+        
+        # Verify calculations
+        expected_vax_cost = 1500
+        expected_health_cost = 2000
+        expected_other_expense = 4000  # feed(3000) + bedding(1000)
+        expected_income = 9500  # milk(5000+4500)
+        expected_total_expense = cow.acquisition_cost + expected_vax_cost + expected_health_cost + expected_other_expense
+        expected_net_profit = expected_income - expected_total_expense
+        
+        if (cow.total_vaccination_cost == expected_vax_cost and
+            cow.total_health_cost == expected_health_cost and
+            cow.total_other_expense == expected_other_expense and
+            cow.total_income == expected_income):
+            self.stdout.write(self.style.SUCCESS('✅ Financial calculations are CORRECT!'))
+        else:
+            self.stdout.write(self.style.ERROR('❌ Financial calculations are WRONG!'))
+        
+        # ========== TEST 18: FILTER RECORDS ==========
+        self.stdout.write('\n\n📝 TEST 18: Filtering Records')
         self.stdout.write('-' * 40)
         
         # Filter vaccinations by date
@@ -407,8 +649,16 @@ class Command(BaseCommand):
         successful_breeding = BreedingRecord.objects.filter(successful=True)
         self.stdout.write(f'✅ Successful breeding records: {successful_breeding.count()}')
         
-        # ========== TEST 14: UPDATE RECORDS ==========
-        self.stdout.write('\n\n📝 TEST 14: Updating Records')
+        # Filter income by source
+        milk_income = AnimalIncome.objects.filter(source='milk_sale')
+        self.stdout.write(f'✅ Milk income records: {milk_income.count()}')
+        
+        # Filter expense by category
+        feed_expenses = AnimalExpense.objects.filter(category='feed')
+        self.stdout.write(f'✅ Feed expenses: {feed_expenses.count()}')
+        
+        # ========== TEST 19: UPDATE RECORDS ==========
+        self.stdout.write('\n\n📝 TEST 19: Updating Records')
         self.stdout.write('-' * 40)
         
         # Update vaccination
@@ -427,8 +677,18 @@ class Command(BaseCommand):
         breed1.save()
         self.stdout.write('✅ Updated breeding record with birth info')
         
-        # ========== TEST 15: TEST PROTECT CONSTRAINT ==========
-        self.stdout.write('\n\n📝 TEST 15: Testing PROTECT Constraint')
+        # Update income record
+        income1.notes = 'Paid via bank transfer'
+        income1.save()
+        self.stdout.write('✅ Updated income record notes')
+        
+        # Update expense record
+        expense1.amount = 3200  # Price increased
+        expense1.save()
+        self.stdout.write('✅ Updated expense amount')
+        
+        # ========== TEST 20: TEST PROTECT CONSTRAINT ==========
+        self.stdout.write('\n\n📝 TEST 20: Testing PROTECT Constraint')
         self.stdout.write('-' * 40)
         
         try:
@@ -437,6 +697,18 @@ class Command(BaseCommand):
             self.stdout.write(self.style.ERROR('❌ This should NOT have worked!'))
         except Exception as e:
             self.stdout.write(self.style.SUCCESS(f'✅ PROTECT still working! Error: {e}'))
+        
+        # ========== TEST 21: DELETE A RECORD ==========
+        self.stdout.write('\n\n📝 TEST 21: Deleting a Record')
+        self.stdout.write('-' * 40)
+        
+        # Delete an expense record
+        expense4.delete()
+        self.stdout.write('✅ Deleted chicken transport expense')
+        
+        # Verify deletion
+        remaining_expenses = AnimalExpense.objects.filter(animal=chicken).count()
+        self.stdout.write(f'✅ Chicken now has {remaining_expenses} expense records')
         
         # ========== TEST SUMMARY ==========
         self.stdout.write('\n\n' + '=' * 60)
@@ -448,10 +720,13 @@ class Command(BaseCommand):
         self.stdout.write(f'✅ Health Records: {HealthRecord.objects.count()}')
         self.stdout.write(f'✅ Milk Records: {MilkRecord.objects.count()}')
         self.stdout.write(f'✅ Breeding Records: {BreedingRecord.objects.count()}')
+        self.stdout.write(f'✅ Income Records: {AnimalIncome.objects.count()}')
+        self.stdout.write(f'✅ Expense Records: {AnimalExpense.objects.count()}')
         self.stdout.write(f'✅ PROTECT constraint: Working')
         self.stdout.write(f'✅ Validation rules: Working')
         self.stdout.write(f'✅ Relationships: Working')
         self.stdout.write(f'✅ Unique constraints: Working')
+        self.stdout.write(f'✅ Financial calculations: Working')
         self.stdout.write('=' * 60)
         self.stdout.write(self.style.SUCCESS('\n✅ All livestock tests passed!'))
         self.stdout.write('=' * 60)

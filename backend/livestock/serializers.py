@@ -56,7 +56,7 @@ class AnimalIncomeSerializer(serializers.ModelSerializer):
     
     source_display = serializers.CharField(source='get_source_display',read_only = True)
     animal_name = serializers.CharField(source='animal.name',read_only = True)
-    animal_tag = serializers.CharField(Source='animal.tag_number', read_only = True)
+    animal_tag = serializers.CharField(source='animal.tag_number', read_only = True)
     user_username = serializers.CharField(source='User.username',read_only=True)
     
     class Meta:
