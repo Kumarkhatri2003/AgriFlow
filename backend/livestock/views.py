@@ -1,14 +1,16 @@
 from rest_framework import generics, permissions, status
 from rest_framework.response import Response
 from django.shortcuts import get_object_or_404
-from .models import AnimalType, Animal, HealthRecord, VaccinationRecord, MilkRecord, BreedingRecord
+from .models import AnimalType, Animal, HealthRecord, VaccinationRecord, MilkRecord, BreedingRecord,AnimalIncome,AnimalExpense
 from .serializers import (
     AnimalTypeSerializer,
     AnimalSerializer,
     VaccinationRecordSerializer,
     HealthRecordSerializer,
     MilkRecordSerializer, 
-    BreedingRecordSerializer,  
+    BreedingRecordSerializer,
+    AnimalIncomeSerializer,
+    AnimalExpenseSerializer
 )
 
 
@@ -212,6 +214,77 @@ class BreedingRecordDetailView(generics.RetrieveUpdateDestroyAPIView):
             animal_id = self.request.data.get('animal')
             get_object_or_404(Animal, id=animal_id, farmer=self.request.user)
         serializer.save()
+        
+#-------------------Animal income------------------------
+class AnimalIncomeListCreateView(generics.ListCreateAPIView):
+    """List all the animal incomes or create a new income records"""
+    serializer_class = AnimalIncomeSerializer
+    permission_classes = [permissions.IsAuthenticated]
+    
+    def get_queryset(self):
+        return AnimalIncome.objects.filter(animal__farmer = self.request.user)
+    
+    def perform_create(self,serializer):
+        
+        animal_id = self.request.data.get('animal')
+        animal = get_object_or_404(Animal,id=animal_id, farmer =self.request.user)
+        
+        serializer.save(user=self.request.user,animal=animal)
+        
+        
+
+class AnimalIncomeDetailView(generics.RetrieveUpdateDestroyAPIView):
+    """Get, Update or delete a specific animal income rocords"""
+    
+    def get_queryset(self):
+        return AnimalIncome.objects.filter(animal__farmer = self.request.user)
+    
+    
+    def perform_update(self, serializer):
+        
+        if 'animal' in self.request.data:
+            animal_id = self.request.data.get('animal')
+            get_object_or_404(Animal,id=animal_id,farmer = self.request.user)
+            
+        serializer.save()
+        
+#-------------------Animal Expense Views-------------------------
+
+class AnimalExpenseListCreateView(generics.ListCreateAPIView):
+    """List all animal expenses or create a new expense record"""
+    
+    serializer_class = AnimalExpenseSerializer
+    permission_classes=[permissions.IsAuthenticated]
+    
+    
+    def get_queryset(self):
+        return AnimalExpense.objects.filter(animal__farmer = self.request.user)
+    
+    def perform_create(self, serializer):
+        animal_id = self.request.data.get('animal')
+        animal = get_object_or_404(Animal,id = animal_id,farmer = self.request.user)
+        
+        serializer.save(user=self.request.user,animal=animal)
+        
+        
+class AnimalExpenseDetailView(generics.RetrieveUpdateDestroyAPIView):
+    """Get, update or delete a specific animal expense record"""
+    
+    serializer_class = AnimalExpenseSerializer
+    permission_classes = [permissions.IsAuthenticated]
+    
+    
+    def get_queryset(self):
+        return AnimalExpense.objects.filter(animal__farmer = self.request.user)
+    
+    def perform_update(self, serializer):
+        # If animal is being changed, verify it belongs to user
+        if 'animal' in self.request.data:
+            animal_id = self.request.data.get('animal')
+            get_object_or_404(Animal,id=animal_id,farmer=self.request.user)
+            
+        serializer.saver()
+
 
 
 # ==================== NESTED VIEWS (UNDER SPECIFIC ANIMAL) ====================
@@ -278,3 +351,38 @@ class AnimalBreedingRecordsView(generics.ListCreateAPIView):
         animal_id = self.kwargs['animal_pk']
         animal = get_object_or_404(Animal, id=animal_id, farmer=self.request.user)
         serializer.save(animal=animal)
+        
+        
+class AnimalIncomesView(generics.ListCreateAPIView):
+    """List all incomes for specific animal"""
+    
+    serializer_class = AnimalIncomeSerializer
+    permission_classes = [permissions.IsAuthenticated]
+    
+    
+    def get_queryset(self):
+        animal_id = self.kwargs['animal_pk']       
+        animal = get_object_or_404(Animal, id=animal_id, farmer = self.request.user)    
+        return AnimalIncome.objects.filter(animal=animal)
+    
+    
+    def perform_create(self, serializer):
+        animal_id = self.kwargs['animal_pk']      
+        animal = get_object_or_404(Animal, id=animal_id, farmer=self.request.user)
+        serializer.save(user=self.request.user, animal=animal)
+        
+        
+class AnimalExpensesView(generics.ListCreateAPIView):
+    """List all expenses for a specific animal"""
+    serializer_class = AnimalExpenseSerializer
+    permission_classes = [permissions.IsAuthenticated]
+    
+    def get_queryset(self):
+        animal_id = self.kwargs['animal_pk']
+        animal = get_object_or_404(Animal, id=animal_id, farmer=self.request.user)
+        return AnimalExpense.objects.filter(animal=animal)
+    
+    def perform_create(self, serializer):
+        animal_id = self.kwargs['animal_pk']
+        animal = get_object_or_404(Animal, id=animal_id, farmer=self.request.user)
+        serializer.save(user=self.request.user, animal=animal)
