@@ -1,5 +1,10 @@
+from traceback import format_tb
+
 from django.contrib import admin
-from .models import AnimalType, Animal, VaccinationRecord, HealthRecord, MilkRecord, BreedingRecord
+from .models import (
+    AnimalType, Animal, VaccinationRecord, HealthRecord, 
+    MilkRecord, BreedingRecord, AnimalIncome, AnimalExpense
+)
 
 # ==================== ANIMAL TYPE ADMIN ====================
 @admin.register(AnimalType)
@@ -48,19 +53,38 @@ class MilkInline(admin.TabularInline):
 class BreedingInline(admin.TabularInline):
     """Inline for breeding records under animal (as mother)"""
     model = BreedingRecord
-    fk_name = 'animal'  # 👈 ADD THIS - tells admin to use 'animal' field, not 'sire_animal'
+    fk_name = 'animal'
     extra = 0
     fields = ['breeding_date', 'successful', 'expected_birth_date', 'offspring_count']
+    readonly_fields = ['created_at']
+
+
+class AnimalIncomeInline(admin.TabularInline):
+    """Inline for income records under animal"""
+    model = AnimalIncome
+    extra = 0
+    fields = ['source', 'amount', 'date', 'description', 'buyer_name']
+    readonly_fields = ['created_at']
+
+
+class AnimalExpenseInline(admin.TabularInline):
+    """Inline for expense records under animal"""
+    model = AnimalExpense
+    extra = 0
+    fields = ['category', 'amount', 'date', 'description', 'vendor_name']
     readonly_fields = ['created_at']
 
 
 # ==================== ANIMAL ADMIN ====================
 @admin.register(Animal)
 class AnimalAdmin(admin.ModelAdmin):
-    list_display = ['tag_number', 'name', 'animal_type', 'farmer', 'gender', 'status', 'is_pregnant']
+    list_display = [
+        'tag_number', 'name', 'animal_type', 'farmer', 'gender', 'status', 
+        'is_pregnant', 'display_total_income', 'display_total_expense', 'display_net_profit'
+    ]
     list_filter = ['animal_type', 'gender', 'status', 'is_pregnant']
     search_fields = ['tag_number', 'name', 'farmer__email', 'farmer__username']
-    readonly_fields = ['created_at', 'updated_at']
+    readonly_fields = ['created_at', 'updated_at', 'display_total_income', 'display_total_expense', 'display_net_profit']
     
     fieldsets = (
         ('Owner Information', {
@@ -75,6 +99,11 @@ class AnimalAdmin(admin.ModelAdmin):
         ('Status', {
             'fields': ('status', 'is_pregnant', 'last_pregnancy_date', 'expected_birth_date')
         }),
+        ('Financial Summary', {
+            'fields': ('display_total_income', 'display_total_expense', 'display_net_profit'),
+            'classes': ('wide',),
+            'description': 'Auto-calculated from related records'
+        }),
         ('Notes', {
             'fields': ('notes',)
         }),
@@ -84,10 +113,35 @@ class AnimalAdmin(admin.ModelAdmin):
         }),
     )
     
-    inlines = [VaccinationInline, HealthInline, MilkInline, BreedingInline]
+    inlines = [
+        VaccinationInline, 
+        HealthInline, 
+        MilkInline, 
+        BreedingInline,
+        AnimalIncomeInline,
+        AnimalExpenseInline
+    ]
     
     def get_queryset(self, request):
         return super().get_queryset(request).select_related('animal_type', 'farmer')
+    
+    # Custom display methods
+    def display_total_income(self, obj):
+        return f"NPR {obj.total_income:,.2f}"
+    display_total_income.short_description = "Total Income"
+    
+    def display_total_expense(self, obj):
+        return f"NPR {obj.total_expense:,.2f}"
+    display_total_expense.short_description = "Total Expense"
+    
+    def display_net_profit(self, obj):
+        profit = obj.net_profit
+        color = 'green' if profit >= 0 else 'red'
+        return format_tb(
+            '<span style="color: {}; font-weight: bold;">NPR {:,.2f}</span>',
+            color, profit
+        )
+    display_net_profit.short_description = "Net Profit"
 
 
 # ==================== VACCINATION RECORD ADMIN ====================
@@ -192,3 +246,63 @@ class BreedingRecordAdmin(admin.ModelAdmin):
             'classes': ('collapse',)
         }),
     )
+
+
+# ==================== ANIMAL INCOME ADMIN ====================
+@admin.register(AnimalIncome)
+class AnimalIncomeAdmin(admin.ModelAdmin):
+    list_display = ['animal', 'source', 'amount', 'date', 'description', 'buyer_name']
+    list_filter = ['source', 'date']
+    search_fields = ['description', 'animal__tag_number', 'animal__name', 'buyer_name']
+    date_hierarchy = 'date'
+    readonly_fields = ['created_at']
+    
+    fieldsets = (
+        ('Animal', {
+            'fields': ('animal',)
+        }),
+        ('Income Details', {
+            'fields': ('source', 'amount', 'date', 'description')
+        }),
+        ('Buyer Information', {
+            'fields': ('buyer_name', 'buyer_contact', 'notes'),
+            'classes': ('wide',)
+        }),
+        ('Timestamps', {
+            'fields': ('created_at',),
+            'classes': ('collapse',)
+        }),
+    )
+    
+    def get_queryset(self, request):
+        return super().get_queryset(request).select_related('animal', 'user')
+
+
+# ==================== ANIMAL EXPENSE ADMIN ====================
+@admin.register(AnimalExpense)
+class AnimalExpenseAdmin(admin.ModelAdmin):
+    list_display = ['animal', 'category', 'amount', 'date', 'description', 'vendor_name']
+    list_filter = ['category', 'date']
+    search_fields = ['description', 'animal__tag_number', 'animal__name', 'vendor_name']
+    date_hierarchy = 'date'
+    readonly_fields = ['created_at']
+    
+    fieldsets = (
+        ('Animal', {
+            'fields': ('animal',)
+        }),
+        ('Expense Details', {
+            'fields': ('category', 'amount', 'date', 'description')
+        }),
+        ('Vendor Information', {
+            'fields': ('vendor_name', 'vendor_contact', 'notes'),
+            'classes': ('wide',)
+        }),
+        ('Timestamps', {
+            'fields': ('created_at',),
+            'classes': ('collapse',)
+        }),
+    )
+    
+    def get_queryset(self, request):
+        return super().get_queryset(request).select_related('animal', 'user')
