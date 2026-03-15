@@ -37,7 +37,9 @@ INSTALLED_APPS = [
     #ourown
     'users',
     'crops',
-    'livestock'
+    'livestock',
+    'finance',
+    
 ]
 
 MIDDLEWARE = [
