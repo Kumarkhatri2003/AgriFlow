@@ -8,6 +8,8 @@ urlpatterns = [
     path('api/auth/', include('users.urls')),
     path('api/crops/', include('crops.urls')),
     path('api/livestock/',include('livestock.urls')),
+    path('api/finance/', include('finance.urls')),
+
 ]
 
 if settings.DEBUG:
