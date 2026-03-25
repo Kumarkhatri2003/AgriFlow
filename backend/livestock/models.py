@@ -35,7 +35,7 @@ class Animal(models.Model):
     # Basic info
     animal_type = models.ForeignKey(AnimalType, on_delete=models.PROTECT, related_name='animals')
     name = models.CharField(max_length=100, blank=True)
-    tag_number = models.CharField(max_length=50, unique=True)
+    tag_number = models.CharField(max_length=50)
     
     # Birth/acquisition info
     birth_date = models.DateField(null=True, blank=True)
@@ -70,6 +70,16 @@ class Animal(models.Model):
     # Timestamps
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
+    
+    class Meta:
+        ordering = ['-created_at']
+        # This ensures one farmer cannot have duplicate tags
+        unique_together = ['farmer', 'tag_number']
+    
+    def __str__(self):
+        if self.name:
+            return f"{self.animal_type} - {self.name} ({self.tag_number})"
+        return f"{self.animal_type} - {self.tag_number}"
     
     # ============= FINANCIAL CALCULATIONS =====================
     @property
