@@ -54,20 +54,22 @@ class DashboardView(APIView):
                 date__year=year - 1
             )
         
-        # Calculate totals
+        # ------------------- FIX: Use .get() to avoid KeyError -------------------
         total_income = transactions.filter(transaction_type__contains='income').aggregate(
-            total=Sum('amount'))['amount__sum'] or 0
+            total=Sum('amount')).get('total') or 0
         
         total_expense = transactions.filter(transaction_type__contains='expense').aggregate(
-            total=Sum('amount'))['amount__sum'] or 0
+            total=Sum('amount')).get('total') or 0
+        # ------------------- END FIX -------------------
         
         net_balance = total_income - total_expense
         
-        # Previous period totals for trends
+        # ------------------- FIX: Use .get() to avoid KeyError -------------------
         prev_income = prev_trans.filter(transaction_type__contains='income').aggregate(
-            total=Sum('amount'))['amount__sum'] or 0
+            total=Sum('amount')).get('total') or 0
         prev_expense = prev_trans.filter(transaction_type__contains='expense').aggregate(
-            total=Sum('amount'))['amount__sum'] or 0
+            total=Sum('amount')).get('total') or 0
+        # ------------------- END FIX -------------------
         
         # Calculate trends
         income_trend = ((total_income - prev_income) / prev_income * 100) if prev_income > 0 else 0
@@ -100,10 +102,12 @@ class DashboardView(APIView):
                 date__year=year,
                 date__month=m
             )
+            # ------------------- FIX: Use .get() to avoid KeyError -------------------
             month_income = month_trans.filter(transaction_type__contains='income').aggregate(
-                total=Sum('amount'))['amount__sum'] or 0
+                total=Sum('amount')).get('total') or 0
             month_expense = month_trans.filter(transaction_type__contains='expense').aggregate(
-                total=Sum('amount'))['amount__sum'] or 0
+                total=Sum('amount')).get('total') or 0
+            # ------------------- END FIX -------------------
             
             monthly_data.append({
                 'month': m,
@@ -247,10 +251,12 @@ class BudgetDetailView(generics.RetrieveUpdateDestroyAPIView):
         if month:
             transactions = transactions.filter(date__month=month)
         
+        # ------------------- FIX: Use .get() to avoid KeyError -------------------
         actual_income = transactions.filter(transaction_type__contains='income').aggregate(
-            total=Sum('amount'))['amount__sum'] or 0
+            total=Sum('amount')).get('total') or 0
         actual_expense = transactions.filter(transaction_type__contains='expense').aggregate(
-            total=Sum('amount'))['amount__sum'] or 0
+            total=Sum('amount')).get('total') or 0
+        # ------------------- END FIX -------------------
         
         serializer.save(
             actual_income=actual_income,
