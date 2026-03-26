@@ -50,6 +50,14 @@ class User(AbstractUser):
     reset_password_token = models.CharField(max_length=255, blank=True, null=True)
     reset_password_expires = models.DateTimeField(null=True, blank=True)
     
+    # Terms and Privacy acceptance
+    agreed_to_terms = models.BooleanField(default=False)
+    agreed_to_privacy = models.BooleanField(default=False)
+    terms_version = models.CharField(max_length=20, blank=True, default='1.0')
+    privacy_version = models.CharField(max_length=20, blank=True, default='1.0')
+    terms_accepted_at = models.DateTimeField(null=True, blank=True)
+    privacy_accepted_at = models.DateTimeField(null=True, blank=True)
+    
     # Timestamps
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)

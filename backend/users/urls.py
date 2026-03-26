@@ -4,6 +4,9 @@ from . import views
 urlpatterns = [
     # Public endpoints
     path('register/', views.RegisterView.as_view(), name='register'),
+    
+    path('terms/check/', views.CheckTermsAcceptanceView.as_view(), name='check-terms'),
+    path('terms/accept/', views.AcceptTermsView.as_view(), name='accept-terms'),
     path('login/', views.LoginView.as_view(), name='login'),
     path('refresh-token/', views.RefreshTokenView.as_view(), name='refresh-token'),
     path('verify-email/', views.VerifyEmailView.as_view(), name='verify-email'),

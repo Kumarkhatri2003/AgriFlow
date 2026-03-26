@@ -24,45 +24,74 @@ class  UserSerializer(serializers.ModelSerializer):
         return f"{obj.first_name} {obj.last_name}".strip() or obj.username
 
 class RegisterSerializer(serializers.ModelSerializer):
-    password = serializers.CharField(
-        write_only = True,
-        required = True,
-        style ={'input_type':'password'},
-        validators =[validate_password]
-    )
-
-    password2 = serializers.CharField(
-        write_only = True,
-        required = True,
-        style ={'input_type':'password'},
-        label = "Confirm Password"
-    )
-
+    password = serializers.CharField(write_only=True, validators=[validate_password])
+    password2 = serializers.CharField(write_only=True)
+    
+    # Add terms fields
+    agreed_to_terms = serializers.BooleanField(write_only=True, required=True)
+    agreed_to_privacy = serializers.BooleanField(write_only=True, required=True)
+    
     class Meta:
         model = User
-        fields = (
-            'email','username','password','password2','first_name','last_name','phone','location'
-            )
-
+        fields = [
+            'username', 'email', 'password', 'password2',
+            'first_name', 'last_name', 'phone',
+            'date_of_birth', 'gender',
+            'geographical_region', 'location', 'district',
+            'agreed_to_terms', 'agreed_to_privacy'  # Add these
+        ]
+    
     def validate(self, attrs):
+        # Check passwords match
         if attrs['password'] != attrs['password2']:
             raise serializers.ValidationError({
-                "password" : "Password fields doesn't match."
+                "password": "Password fields didn't match."
             })
+        
+        # Check terms acceptance
+        if not attrs.get('agreed_to_terms'):
+            raise serializers.ValidationError({
+                "agreed_to_terms": "You must agree to the Terms of Service."
+            })
+        
+        if not attrs.get('agreed_to_privacy'):
+            raise serializers.ValidationError({
+                "agreed_to_privacy": "You must agree to the Privacy Policy."
+            })
+        
         return attrs
-
+    
     def create(self, validated_data):
-        validated_data.pop('password2') 
-
+        # Remove terms fields from user creation
+        agreed_to_terms = validated_data.pop('agreed_to_terms')
+        agreed_to_privacy = validated_data.pop('agreed_to_privacy')
+        
         user = User.objects.create_user(
-            **validated_data,
-            is_active=True
-        ) 
-
-        #Generate email verification
+            username=validated_data['username'],
+            email=validated_data['email'],
+            password=validated_data['password'],
+            first_name=validated_data.get('first_name', ''),
+            last_name=validated_data.get('last_name', ''),
+            phone=validated_data.get('phone', ''),
+            date_of_birth=validated_data.get('date_of_birth'),
+            gender=validated_data.get('gender', ''),
+            geographical_region=validated_data.get('geographical_region', ''),
+            location=validated_data.get('location', ''),
+            district=validated_data.get('district', ''),
+            is_active=True,
+            is_farmer=True,
+            agreed_to_terms=agreed_to_terms,
+            agreed_to_privacy=agreed_to_privacy,
+            terms_version='1.0',
+            privacy_version='1.0',
+            terms_accepted_at=timezone.now(),
+            privacy_accepted_at=timezone.now()
+        )
+        
+        # Generate email verification token
         user.email_verification_token = str(uuid.uuid4())
         user.save()
-
+        
         return user
     
 class LoginSerializer(serializers.Serializer):
