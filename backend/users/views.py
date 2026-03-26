@@ -54,6 +54,47 @@ class LoginView(APIView):
             'success': False,
             'errors': serializer.errors
         }, status=status.HTTP_400_BAD_REQUEST)
+        
+class CheckTermsAcceptanceView(APIView):
+    """Check if user has accepted latest terms"""
+    permission_classes = [IsAuthenticated]
+    
+    def get(self, request):
+        user = request.user
+        current_terms_version = '1.0'
+        current_privacy_version = '1.0'
+        
+        needs_terms_update = user.terms_version != current_terms_version
+        needs_privacy_update = user.privacy_version != current_privacy_version
+        
+        return Response({
+            'needs_terms_update': needs_terms_update,
+            'needs_privacy_update': needs_privacy_update,
+            'current_terms_version': current_terms_version,
+            'current_privacy_version': current_privacy_version,
+            'user_terms_version': user.terms_version,
+            'user_privacy_version': user.privacy_version
+        })
+
+class AcceptTermsView(APIView):
+    """Accept latest terms"""
+    permission_classes = [IsAuthenticated]
+    
+    def post(self, request):
+        user = request.user
+        terms_version = request.data.get('terms_version', '1.0')
+        privacy_version = request.data.get('privacy_version', '1.0')
+        
+        user.terms_version = terms_version
+        user.privacy_version = privacy_version
+        user.terms_accepted_at = timezone.now()
+        user.privacy_accepted_at = timezone.now()
+        user.save()
+        
+        return Response({
+            'success': True,
+            'message': 'Terms accepted successfully'
+        })
 
 class RefreshTokenView(APIView):
     """Refresh JWT token"""
