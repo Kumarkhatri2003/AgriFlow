@@ -13,6 +13,7 @@ from .serializers import (
 from .models import User
 from django.utils import timezone
 import uuid
+from django.conf import settings
 
 # Create your views here.
 
@@ -24,7 +25,7 @@ class RegisterView(APIView):
         
         if serializer.is_valid():
             user = serializer.save()
-            send_verification_email(user, request)
+            send_verification_email(user)
 
             return Response({
                 'success': True,
@@ -110,7 +111,6 @@ class RefreshTokenView(APIView):
             }, status=status.HTTP_400_BAD_REQUEST)
         
         try:
-            # FIXED: Use RefreshToken class, not the view
             token = RefreshToken(refresh)
             return Response({
                 'success': True,
@@ -201,7 +201,7 @@ class PasswordResetRequestView(APIView):
 
             try:
                 user = User.objects.get(email=email)
-                send_password_reset_email(user, request)
+                send_password_reset_email(user)
             except User.DoesNotExist:
                 # Don't reveal that user doesn't exist (security)
                 pass
@@ -247,7 +247,7 @@ class PasswordResetConfirmView(APIView):
                     'error': 'Invalid or expired reset token'
                 }, status=status.HTTP_400_BAD_REQUEST)
         
-        # FIXED: This return is now properly outside the if block
+       
         return Response({
             'success': False,
             'errors': serializer.errors
