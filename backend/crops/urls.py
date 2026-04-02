@@ -25,11 +25,7 @@ urlpatterns = [
     # NEW: Harvest Record URLs
     path('harvests/', views.HarvestRecordListCreateView.as_view(), name='harvest-list'),
     path('harvests/<uuid:pk>/', views.HarvestRecordDetailView.as_view(), name='harvest-detail'),
-    
-    # Nested URLs (under specific crop)
-    path('<int:crop_pk>/fertilizers/', views.CropFertilizersView.as_view(), name='crop-fertilizers'),
-    path('<int:crop_pk>/pesticides/', views.CropPesticidesView.as_view(), name='crop-pesticides'),
-    
+        
     # Nested URLs
     path('<uuid:crop_pk>/fertilizers/', views.CropFertilizersView.as_view(), name='crop-fertilizers'),
     path('<uuid:crop_pk>/pesticides/', views.CropPesticidesView.as_view(), name='crop-pesticides'),
