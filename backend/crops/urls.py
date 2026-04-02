@@ -4,7 +4,7 @@ from . import views
 urlpatterns = [
     # Main Crop URLs
     path('', views.CropListCreateView.as_view(), name='crop-list'),
-    path('<<uuid:pk>/', views.CropDetailView.as_view(), name='crop-detail'), 
+    path('<uuid:pk>/', views.CropDetailView.as_view(), name='crop-detail'), 
     
     # Fertilizer URLs
     path('fertilizers/', views.FertilizerListCreateView.as_view(), name='fertilizer-list'),
