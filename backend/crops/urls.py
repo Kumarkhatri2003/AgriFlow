@@ -1,3 +1,4 @@
+# crops/urls.py
 from django.urls import path
 from . import views
 
@@ -14,17 +15,21 @@ urlpatterns = [
     path('pesticides/', views.PesticideListCreateView.as_view(), name='pesticide-list'),
     path('pesticides/<uuid:pk>/', views.PesticideDetailView.as_view(), name='pesticide-detail'),
     
-    # NEW: Crop Expense URLs
+    # Crop Expense URLs
     path('expenses/', views.CropExpenseListCreateView.as_view(), name='expense-list'),
     path('expenses/<uuid:pk>/', views.CropExpenseDetailView.as_view(), name='expense-detail'),
     
-    # NEW: Crop Income URLs
+    # Crop Income URLs
     path('incomes/', views.CropIncomeListCreateView.as_view(), name='income-list'),
     path('incomes/<uuid:pk>/', views.CropIncomeDetailView.as_view(), name='income-detail'),
     
-    # NEW: Harvest Record URLs
+    # Harvest Record URLs
     path('harvests/', views.HarvestRecordListCreateView.as_view(), name='harvest-list'),
     path('harvests/<uuid:pk>/', views.HarvestRecordDetailView.as_view(), name='harvest-detail'),
+    
+    # Labor URLs
+    path('labor/', views.LaborListCreateView.as_view(), name='labor-list'),
+    path('labor/<uuid:pk>/', views.LaborDetailView.as_view(), name='labor-detail'),
     
     # Nested URLs (under specific crop)
     path('<uuid:crop_pk>/fertilizers/', views.CropFertilizersView.as_view(), name='crop-fertilizers'),
@@ -32,4 +37,5 @@ urlpatterns = [
     path('<uuid:crop_pk>/expenses/', views.CropExpensesView.as_view(), name='crop-expenses'),
     path('<uuid:crop_pk>/incomes/', views.CropIncomesView.as_view(), name='crop-incomes'),
     path('<uuid:crop_pk>/harvests/', views.CropHarvestsView.as_view(), name='crop-harvests'),
+    path('<uuid:crop_pk>/labor/', views.CropLaborView.as_view(), name='crop-labor'),
 ]
