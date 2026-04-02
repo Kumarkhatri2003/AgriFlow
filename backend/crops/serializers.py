@@ -192,7 +192,7 @@ class FertilizerRecordCreateSerializer(serializers.ModelSerializer):
     
     class Meta:
         model = FertilizerRecord
-        fields = ['crop', 'fertilizer_type', 'name', 'quantity', 'unit', 'cost', 'application_date', 'notes']
+        fields = ['fertilizer_type', 'name', 'quantity', 'unit', 'cost', 'application_date', 'notes']
     
     def validate_cost(self, value):
         if value < 0:
@@ -205,7 +205,7 @@ class PesticideRecordCreateSerializer(serializers.ModelSerializer):
     
     class Meta:
         model = PesticideRecord
-        fields = ['crop', 'name', 'target_pest', 'quantity', 'unit', 'cost', 'application_date', 'notes']
+        fields = ['name', 'target_pest', 'quantity', 'unit', 'cost', 'application_date', 'notes']
     
     def validate_cost(self, value):
         if value < 0:
@@ -218,7 +218,7 @@ class CropExpenseCreateSerializer(serializers.ModelSerializer):
     
     class Meta:
         model = CropExpense
-        fields = ['crop', 'category', 'amount', 'date', 'description', 'vendor_name', 'vendor_contact', 'notes']
+        fields = ['category', 'amount', 'date', 'description', 'vendor_name', 'vendor_contact', 'notes']
     
     def validate_amount(self, value):
         if value <= 0:
@@ -231,7 +231,7 @@ class CropIncomeCreateSerializer(serializers.ModelSerializer):
     
     class Meta:
         model = CropIncome
-        fields = ['crop', 'source', 'amount', 'date', 'description', 'buyer_name', 'buyer_contact', 'notes']
+        fields = ['source', 'amount', 'date', 'description', 'buyer_name', 'buyer_contact', 'notes']
     
     def validate_amount(self, value):
         if value <= 0:
@@ -244,7 +244,7 @@ class HarvestRecordCreateSerializer(serializers.ModelSerializer):
     
     class Meta:
         model = HarvestRecord
-        fields = ['crop', 'harvest_date', 'quantity', 'unit', 'quality', 'notes']
+        fields = ['harvest_date', 'quantity', 'unit', 'quality', 'notes']
     
     def validate_quantity(self, value):
         if value <= 0:
