@@ -75,6 +75,12 @@ class Crop(models.Model):
         return self.pesticides.aggregate(total=Sum('cost'))['total'] or 0
     
     @property
+    def total_labor_cost(self):
+        """Sum of all labor costs"""
+        from django.db.models import Sum
+        return self.labour_records.aggregate(total=Sum('total_cost'))['total'] or 0
+    
+    @property
     def total_other_expense(self):
         """Sum of all other expenses (labor, rent, seeds, etc.)"""
         from django.db.models import Sum
@@ -83,7 +89,7 @@ class Crop(models.Model):
     @property
     def total_expense(self):
         """Total of ALL expenses"""
-        return self.total_fertilizer_cost + self.total_pesticide_cost + self.total_other_expense
+        return self.total_fertilizer_cost + self.total_pesticide_cost +self.total_labor_cost + self.total_other_expense
 
     @property
     def total_income(self):
@@ -188,7 +194,7 @@ class CropExpense(models.Model):
     user = models.ForeignKey(User, on_delete=models.CASCADE, related_name='crop_expenses')
     crop = models.ForeignKey(Crop, on_delete=models.CASCADE, related_name='expenses')
 
-    #Notice: fertilizer and pesticide are NOT in this list!
+   
     EXPENSE_CATEGORIES = [
         ('seed', 'Seeds (बीउ)'),
         ('labor', 'Labor (ज्याला)'),
@@ -286,3 +292,32 @@ class HarvestRecord(models.Model):
 
     def __str__(self):
         return f"{self.crop.name} - {self.quantity}{self.unit} on {self.harvest_date}"
+
+
+class Labour(models.Model):
+    """Track labor details for crop activities"""
+
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    user = models.ForeignKey(User, on_delete=models.CASCADE, related_name='labour_records')
+    crop = models.ForeignKey(Crop, on_delete=models.CASCADE, related_name='labour_records')
+    
+    name = models.CharField(max_length=255)
+    workers_count = models.PositiveIntegerField(default=1)
+    days = models.PositiveIntegerField(default=1)
+    rate_per_day = models.DecimalField(max_digits=10, decimal_places=2, default=0)
+    total_cost = models.DecimalField(max_digits=12, decimal_places=2, default=0)
+    
+    date = models.DateField(null=True, blank=True)
+    notes = models.TextField(blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    
+    def save(self, *args, **kwargs):
+        # Auto-calculate total cost
+        self.total_cost = self.workers_count * self.days * self.rate_per_day
+        super().save(*args, **kwargs)
+    
+    def __str__(self):
+        return f"{self.name} - {self.workers_count} workers × {self.days} days"
+    
+    class Meta:
+        ordering = ['-date']
