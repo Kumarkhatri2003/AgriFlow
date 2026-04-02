@@ -9,10 +9,15 @@ from .models import (
 from .serializers import (
     CropSerializer,
     FertilizerRecordSerializer,
+    FertilizerRecordCreateSerializer,  # Import this
     PesticideRecordSerializer,
+    PesticideRecordCreateSerializer,   # Import this
     CropExpenseSerializer,
+    CropExpenseCreateSerializer,       # Import this
     CropIncomeSerializer,
-    HarvestRecordSerializer
+    CropIncomeCreateSerializer,        # Import this
+    HarvestRecordSerializer,
+    HarvestRecordCreateSerializer,     # Import this
 )
 import uuid
 
@@ -40,7 +45,13 @@ class CropDetailView(generics.RetrieveUpdateDestroyAPIView):
 # ==================== FERTILIZER VIEWS ====================
 
 class FertilizerListCreateView(generics.ListCreateAPIView):
-    serializer_class = FertilizerRecordSerializer
+    """List all fertilizers or create a new fertilizer record"""
+    
+    def get_serializer_class(self):
+        if self.request.method == 'POST':
+            return FertilizerRecordCreateSerializer
+        return FertilizerRecordSerializer
+    
     permission_classes = [permissions.IsAuthenticated]
     
     def get_queryset(self):
@@ -48,7 +59,6 @@ class FertilizerListCreateView(generics.ListCreateAPIView):
     
     def perform_create(self, serializer):
         crop_id = self.request.data.get('crop')
-        # Handle UUID string
         if isinstance(crop_id, str):
             crop_id = uuid.UUID(crop_id)
         crop = get_object_or_404(Crop, id=crop_id, farmer=self.request.user)
@@ -66,7 +76,13 @@ class FertilizerDetailView(generics.RetrieveUpdateDestroyAPIView):
 # ==================== PESTICIDE VIEWS ====================
 
 class PesticideListCreateView(generics.ListCreateAPIView):
-    serializer_class = PesticideRecordSerializer
+    """List all pesticides or create a new pesticide record"""
+    
+    def get_serializer_class(self):
+        if self.request.method == 'POST':
+            return PesticideRecordCreateSerializer
+        return PesticideRecordSerializer
+    
     permission_classes = [permissions.IsAuthenticated]
     
     def get_queryset(self):
@@ -91,7 +107,13 @@ class PesticideDetailView(generics.RetrieveUpdateDestroyAPIView):
 # ==================== CROP EXPENSE VIEWS ====================
 
 class CropExpenseListCreateView(generics.ListCreateAPIView):
-    serializer_class = CropExpenseSerializer
+    """List all crop expenses or create a new expense"""
+    
+    def get_serializer_class(self):
+        if self.request.method == 'POST':
+            return CropExpenseCreateSerializer
+        return CropExpenseSerializer
+    
     permission_classes = [permissions.IsAuthenticated]
     
     def get_queryset(self):
@@ -116,7 +138,13 @@ class CropExpenseDetailView(generics.RetrieveUpdateDestroyAPIView):
 # ==================== CROP INCOME VIEWS ====================
 
 class CropIncomeListCreateView(generics.ListCreateAPIView):
-    serializer_class = CropIncomeSerializer
+    """List all crop incomes or create a new income"""
+    
+    def get_serializer_class(self):
+        if self.request.method == 'POST':
+            return CropIncomeCreateSerializer
+        return CropIncomeSerializer
+    
     permission_classes = [permissions.IsAuthenticated]
     
     def get_queryset(self):
@@ -141,7 +169,13 @@ class CropIncomeDetailView(generics.RetrieveUpdateDestroyAPIView):
 # ==================== HARVEST RECORD VIEWS ====================
 
 class HarvestRecordListCreateView(generics.ListCreateAPIView):
-    serializer_class = HarvestRecordSerializer
+    """List all harvest records or create a new harvest record"""
+    
+    def get_serializer_class(self):
+        if self.request.method == 'POST':
+            return HarvestRecordCreateSerializer
+        return HarvestRecordSerializer
+    
     permission_classes = [permissions.IsAuthenticated]
     
     def get_queryset(self):
@@ -164,15 +198,20 @@ class HarvestRecordDetailView(generics.RetrieveUpdateDestroyAPIView):
 
 
 # ==================== NESTED VIEWS (UNDER SPECIFIC CROP) ====================
+# These are the most important for your frontend!
 
 class CropFertilizersView(generics.ListCreateAPIView):
-    """List all fertilizers for specific crop"""
-    serializer_class = FertilizerRecordSerializer
+    """List all fertilizers for specific crop or create new fertilizer"""
+    
+    def get_serializer_class(self):
+        if self.request.method == 'POST':
+            return FertilizerRecordCreateSerializer
+        return FertilizerRecordSerializer
+    
     permission_classes = [permissions.IsAuthenticated]
     
     def get_queryset(self):
         crop_pk = self.kwargs['crop_pk']
-        # Convert string to UUID if needed
         if isinstance(crop_pk, str):
             crop_pk = uuid.UUID(crop_pk)
         crop = get_object_or_404(Crop, id=crop_pk, farmer=self.request.user)
@@ -188,7 +227,12 @@ class CropFertilizersView(generics.ListCreateAPIView):
 
 class CropPesticidesView(generics.ListCreateAPIView):
     """List all pesticides for a specific crop"""
-    serializer_class = PesticideRecordSerializer
+    
+    def get_serializer_class(self):
+        if self.request.method == 'POST':
+            return PesticideRecordCreateSerializer
+        return PesticideRecordSerializer
+    
     permission_classes = [permissions.IsAuthenticated]
     
     def get_queryset(self):
@@ -208,7 +252,12 @@ class CropPesticidesView(generics.ListCreateAPIView):
 
 class CropExpensesView(generics.ListCreateAPIView):
     """List all expenses for a specific crop"""
-    serializer_class = CropExpenseSerializer
+    
+    def get_serializer_class(self):
+        if self.request.method == 'POST':
+            return CropExpenseCreateSerializer
+        return CropExpenseSerializer
+    
     permission_classes = [permissions.IsAuthenticated]
     
     def get_queryset(self):
@@ -228,7 +277,12 @@ class CropExpensesView(generics.ListCreateAPIView):
 
 class CropIncomesView(generics.ListCreateAPIView):
     """List all incomes for a specific crop"""
-    serializer_class = CropIncomeSerializer
+    
+    def get_serializer_class(self):
+        if self.request.method == 'POST':
+            return CropIncomeCreateSerializer
+        return CropIncomeSerializer
+    
     permission_classes = [permissions.IsAuthenticated]
     
     def get_queryset(self):
@@ -248,7 +302,12 @@ class CropIncomesView(generics.ListCreateAPIView):
 
 class CropHarvestsView(generics.ListCreateAPIView):
     """List all harvests for a specific crop"""
-    serializer_class = HarvestRecordSerializer
+    
+    def get_serializer_class(self):
+        if self.request.method == 'POST':
+            return HarvestRecordCreateSerializer
+        return HarvestRecordSerializer
+    
     permission_classes = [permissions.IsAuthenticated]
     
     def get_queryset(self):
