@@ -13,6 +13,7 @@ from .serializers import (
 from .models import User
 from django.utils import timezone
 import uuid
+from django.conf import settings
 
 # Create your views here.
 
@@ -24,7 +25,7 @@ class RegisterView(APIView):
         
         if serializer.is_valid():
             user = serializer.save()
-            send_verification_email(user, request)
+            send_verification_email(user)
 
             return Response({
                 'success': True,
@@ -54,6 +55,47 @@ class LoginView(APIView):
             'success': False,
             'errors': serializer.errors
         }, status=status.HTTP_400_BAD_REQUEST)
+        
+class CheckTermsAcceptanceView(APIView):
+    """Check if user has accepted latest terms"""
+    permission_classes = [IsAuthenticated]
+    
+    def get(self, request):
+        user = request.user
+        current_terms_version = '1.0'
+        current_privacy_version = '1.0'
+        
+        needs_terms_update = user.terms_version != current_terms_version
+        needs_privacy_update = user.privacy_version != current_privacy_version
+        
+        return Response({
+            'needs_terms_update': needs_terms_update,
+            'needs_privacy_update': needs_privacy_update,
+            'current_terms_version': current_terms_version,
+            'current_privacy_version': current_privacy_version,
+            'user_terms_version': user.terms_version,
+            'user_privacy_version': user.privacy_version
+        })
+
+class AcceptTermsView(APIView):
+    """Accept latest terms"""
+    permission_classes = [IsAuthenticated]
+    
+    def post(self, request):
+        user = request.user
+        terms_version = request.data.get('terms_version', '1.0')
+        privacy_version = request.data.get('privacy_version', '1.0')
+        
+        user.terms_version = terms_version
+        user.privacy_version = privacy_version
+        user.terms_accepted_at = timezone.now()
+        user.privacy_accepted_at = timezone.now()
+        user.save()
+        
+        return Response({
+            'success': True,
+            'message': 'Terms accepted successfully'
+        })
 
 class RefreshTokenView(APIView):
     """Refresh JWT token"""
@@ -69,7 +111,6 @@ class RefreshTokenView(APIView):
             }, status=status.HTTP_400_BAD_REQUEST)
         
         try:
-            # FIXED: Use RefreshToken class, not the view
             token = RefreshToken(refresh)
             return Response({
                 'success': True,
@@ -160,7 +201,7 @@ class PasswordResetRequestView(APIView):
 
             try:
                 user = User.objects.get(email=email)
-                send_password_reset_email(user, request)
+                send_password_reset_email(user)
             except User.DoesNotExist:
                 # Don't reveal that user doesn't exist (security)
                 pass
@@ -206,7 +247,7 @@ class PasswordResetConfirmView(APIView):
                     'error': 'Invalid or expired reset token'
                 }, status=status.HTTP_400_BAD_REQUEST)
         
-        # FIXED: This return is now properly outside the if block
+       
         return Response({
             'success': False,
             'errors': serializer.errors
