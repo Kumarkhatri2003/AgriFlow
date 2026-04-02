@@ -9,15 +9,15 @@ from .models import (
 from .serializers import (
     CropSerializer,
     FertilizerRecordSerializer,
-    FertilizerRecordCreateSerializer,  # Import this
+    FertilizerRecordCreateSerializer, 
     PesticideRecordSerializer,
-    PesticideRecordCreateSerializer,   # Import this
+    PesticideRecordCreateSerializer,   
     CropExpenseSerializer,
-    CropExpenseCreateSerializer,       # Import this
+    CropExpenseCreateSerializer,       
     CropIncomeSerializer,
-    CropIncomeCreateSerializer,        # Import this
+    CropIncomeCreateSerializer,        
     HarvestRecordSerializer,
-    HarvestRecordCreateSerializer,     # Import this
+    HarvestRecordCreateSerializer,     
 )
 import uuid
 
