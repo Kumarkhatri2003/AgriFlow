@@ -4,7 +4,7 @@ from . import views
 urlpatterns = [
     # Main Crop URLs
     path('', views.CropListCreateView.as_view(), name='crop-list'),
-    path('<uuid:pk>/', views.CropDetailView.as_view(), name='crop-detail'), 
+    path('<<uuid:pk>/', views.CropDetailView.as_view(), name='crop-detail'), 
     
     # Fertilizer URLs
     path('fertilizers/', views.FertilizerListCreateView.as_view(), name='fertilizer-list'),
@@ -30,8 +30,10 @@ urlpatterns = [
     path('<int:crop_pk>/fertilizers/', views.CropFertilizersView.as_view(), name='crop-fertilizers'),
     path('<int:crop_pk>/pesticides/', views.CropPesticidesView.as_view(), name='crop-pesticides'),
     
-    # NEW: Nested URLs for new models
-    path('<int:crop_pk>/expenses/', views.CropExpensesView.as_view(), name='crop-expenses'),
-    path('<int:crop_pk>/incomes/', views.CropIncomesView.as_view(), name='crop-incomes'),
-    path('<int:crop_pk>/harvests/', views.CropHarvestsView.as_view(), name='crop-harvests'),
+    # Nested URLs
+    path('<uuid:crop_pk>/fertilizers/', views.CropFertilizersView.as_view(), name='crop-fertilizers'),
+    path('<uuid:crop_pk>/pesticides/', views.CropPesticidesView.as_view(), name='crop-pesticides'),
+    path('<uuid:crop_pk>/expenses/', views.CropExpensesView.as_view(), name='crop-expenses'),
+    path('<uuid:crop_pk>/incomes/', views.CropIncomesView.as_view(), name='crop-incomes'),
+    path('<uuid:crop_pk>/harvests/', views.CropHarvestsView.as_view(), name='crop-harvests'),
 ]
