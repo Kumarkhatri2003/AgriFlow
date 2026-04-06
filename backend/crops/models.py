@@ -319,5 +319,10 @@ class Labour(models.Model):
     def __str__(self):
         return f"{self.name} - {self.workers_count} workers × {self.days} days"
     
+    def save(self, *args, **kwargs):
+        # Auto-calculate total cost before saving
+        self.total_cost = self.workers_count * self.days * self.rate_per_day
+        super().save(*args, **kwargs)
+    
     class Meta:
         ordering = ['-date']
