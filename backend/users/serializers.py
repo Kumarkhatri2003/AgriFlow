@@ -473,7 +473,57 @@ class LoginSerializer(serializers.Serializer):
             raise serializers.ValidationError(
                 "Must include both 'email' and 'password'."
             )
-
+class LoginSerializer(serializers.Serializer):
+    email = serializers.EmailField()
+    password = serializers.CharField(
+        write_only=True,
+        style={'input_type': 'password'}
+    )
+    
+    def validate_email(self, value):
+        """Normalize email to lowercase"""
+        return value.lower()
+    
+    def validate(self, data):
+        email = data.get('email')
+        password = data.get('password')
+        
+        if email and password:
+            try:
+                user = User.objects.get(email=email)
+            except User.DoesNotExist:
+                raise serializers.ValidationError(
+                    "Unable to log in with provided credentials. Please check your email and password."
+                )
+            
+        
+            if user.check_password(password):
+                if not user.is_email_verified:
+                    raise serializers.ValidationError(
+                        "Please verify your email first. Check your inbox for the verification link."
+                    )
+                
+                if not user.is_active:
+                    raise serializers.ValidationError(
+                        "Your account has been disabled. Please contact support."
+                    )
+                
+                # Generate JWT tokens
+                refresh = RefreshToken.for_user(user)
+                
+                return {
+                    'user': UserSerializer(user).data,
+                    'access': str(refresh.access_token),
+                    'refresh': str(refresh)
+                }
+            else:
+                raise serializers.ValidationError(
+                    "Unable to log in with provided credentials. Please check your email and password."
+                )
+        else:
+            raise serializers.ValidationError(
+                "Must include both 'email' and 'password'."
+            )
 
 #---------------Change Password Serializer------------------#            
 class ChangePasswordSerializer(serializers.Serializer):

@@ -65,26 +65,35 @@ class LoginView(generics.GenericAPIView):
         }, status=status.HTTP_400_BAD_REQUEST)
 
 
-class CustomTokenRefreshView(TokenRefreshView):
+class CustomTokenRefreshView(generics.GenericAPIView):
     """Refresh JWT token endpoint"""
     permission_classes = [AllowAny]
 
     def post(self, request, *args, **kwargs):
-        refresh = request.data.get('refresh')
+        refresh_token = request.data.get('refresh')
+        
+        print(f"Debug - Received refresh token: {refresh_token[:50] if refresh_token else 'None'}...")
 
-        if not refresh:
+        if not refresh_token:
             return Response({
                 'success': False,
                 'error': 'Refresh token required'
             }, status=status.HTTP_400_BAD_REQUEST)
         
         try:
-            response = super().post(request, *args, **kwargs)
+            # Create a RefreshToken object from the token string
+            refresh = RefreshToken(refresh_token)
+            
+            # Get the new access token
+            access_token = str(refresh.access_token)
+            
             return Response({
                 'success': True,
-                'access': response.data.get('access')
-            })
+                'access': access_token
+            }, status=status.HTTP_200_OK)
+            
         except Exception as e:
+            print(f"Debug - Refresh error: {str(e)}")
             return Response({
                 'success': False,
                 'error': f'Invalid refresh token: {str(e)}'

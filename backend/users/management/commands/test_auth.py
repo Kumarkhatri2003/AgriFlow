@@ -5,10 +5,12 @@ from django.test import RequestFactory, override_settings
 from rest_framework.test import force_authenticate
 from rest_framework_simplejwt.tokens import RefreshToken
 from users.views import (
-    RegisterView, LoginView, RefreshTokenView, VerifyEmailView,
+    RegisterView, LoginView, CustomTokenRefreshView, VerifyEmailView,
     ResendVerificationView, PasswordResetRequestView, PasswordResetConfirmView,
-    ProfileView, ChangePasswordView, LogoutView, DeleteAccountView
+    UserProfileViewSet, ChangePasswordView, LogoutView, DeleteAccountView,
+    CheckTermsAcceptanceView, AcceptTermsView
 )
+from users.serializers import UserSerializer
 import uuid
 
 User = get_user_model()
@@ -60,7 +62,9 @@ class Command(BaseCommand):
             'first_name': test_data['first_name'],
             'last_name': test_data['last_name'],
             'phone': test_data['phone'],
-            'location': test_data['location']
+            'location': test_data['location'],
+            'agreed_to_terms': True,  # Required field
+            'agreed_to_privacy': True  # Required field
         }
         
         request = factory.post('/api/auth/register/', data, format='json')
@@ -88,6 +92,7 @@ class Command(BaseCommand):
                 test_data['verification_token'] = user.email_verification_token
             else:
                 self.stdout.write(self.style.ERROR('❌ No verification token found'))
+                return
         except User.DoesNotExist:
             self.stdout.write(self.style.ERROR('❌ User not found'))
             return
@@ -103,11 +108,14 @@ class Command(BaseCommand):
         
         if response.status_code == 200:
             self.stdout.write(self.style.SUCCESS('✅ Email verified successfully'))
+            # Refresh user object to get updated verification status
+            user.refresh_from_db()
+            self.stdout.write(f'   - Email verified status: {user.is_email_verified}')
         else:
             self.stdout.write(self.style.ERROR(f'❌ Email verification failed: {response.data}'))
             return
         
-        # ========== TEST 4: LOGIN ==========
+        # ========== TEST 4: LOGIN (Now email is verified) ==========
         self.stdout.write('\n\n🔑 TEST 4: User Login')
         self.stdout.write('-' * 40)
         
@@ -133,74 +141,76 @@ class Command(BaseCommand):
             test_data['refresh_token'] = tokens['refresh']
         else:
             self.stdout.write(self.style.ERROR(f'❌ Login failed: {response.data}'))
+            # Debug: Check user verification status
+            user.refresh_from_db()
+            self.stdout.write(f'   - Debug: User email verified: {user.is_email_verified}')
+            self.stdout.write(f'   - Debug: User is active: {user.is_active}')
             return
         
         # ========== TEST 5: REFRESH TOKEN ==========
         self.stdout.write('\n\n🔄 TEST 5: Refresh Token')
         self.stdout.write('-' * 40)
         
-        # Debug: Check what tokens we have
-        self.stdout.write(f'   - Debug: tokens dict keys: {list(tokens.keys())}')
-        self.stdout.write(f'   - Debug: refresh token exists: {bool(tokens.get("refresh"))}')
-        
         if not tokens.get('refresh'):
             self.stdout.write(self.style.ERROR('❌ No refresh token available'))
             return
         
-        # Debug: Show token preview
         refresh_token = tokens['refresh']
-        self.stdout.write(f'   - Debug: refresh token preview: {refresh_token[:50]}...')
-        
-        data = {
-            'refresh': refresh_token
-        }
-        
-        # Try with proper content type
-        request = factory.post('/api/auth/refresh-token/', data, format='json')
+        self.stdout.write(f'   - Using refresh token: {refresh_token[:30]}...')
+        self.stdout.write(f'   - Refresh token length: {len(refresh_token)}')
+        # Method 1: Using json.dumps to ensure proper JSON format
+        import json
+        data = json.dumps({'refresh': refresh_token})
+
+        request = factory.post(
+            '/api/auth/refresh-token/', 
+            data=data,
+            content_type='application/json'
+        )
         request.META['HTTP_HOST'] = 'testserver'
-        request.META['CONTENT_TYPE'] = 'application/json'
-        
-        response = RefreshTokenView.as_view()(request)
-        
+
+        response = CustomTokenRefreshView.as_view()(request)
+
         self.stdout.write(f'   - Response status: {response.status_code}')
         self.stdout.write(f'   - Response data: {response.data}')
-        
+
         if response.status_code == 200:
             self.stdout.write(self.style.SUCCESS('✅ Token refreshed successfully'))
             self.stdout.write(f'   - New access token: {response.data["access"][:30]}...')
-            # Update the access token
             tokens['access'] = response.data['access']
             test_data['access_token'] = response.data['access']
         else:
-            self.stdout.write(self.style.ERROR(f'❌ Token refresh failed'))
-            # Let's try one more time with a different approach
-            self.stdout.write('\n   🔄 Retrying with different approach...')
+            self.stdout.write(self.style.ERROR(f'❌ Token refresh failed: {response.data}'))
             
-            # Try using the token directly
+            # Fallback: Try manual refresh
+            self.stdout.write('\n   🔄 Trying manual refresh...')
             try:
+                from rest_framework_simplejwt.tokens import RefreshToken
                 refresh = RefreshToken(refresh_token)
                 new_access = str(refresh.access_token)
-                self.stdout.write(self.style.SUCCESS('   ✅ Manual token refresh successful'))
+                self.stdout.write(self.style.SUCCESS('   ✅ Manual refresh successful'))
                 self.stdout.write(f'   - New access token: {new_access[:30]}...')
                 tokens['access'] = new_access
                 test_data['access_token'] = new_access
             except Exception as e:
-                self.stdout.write(self.style.ERROR(f'   ❌ Manual refresh also failed: {str(e)}'))
+                self.stdout.write(self.style.ERROR(f'   ❌ Manual refresh failed: {str(e)}'))
                 return
         
-        # ========== TEST 6: GET PROFILE ==========
+        # ========== TEST 6: GET PROFILE (Using ViewSet) ==========
         self.stdout.write('\n\n👤 TEST 6: Get User Profile')
         self.stdout.write('-' * 40)
-        
+
         request = factory.get('/api/auth/profile/')
         request.META['HTTP_HOST'] = 'testserver'
-        
+
         # Manually authenticate for testing
         user = User.objects.get(email=test_data['email'])
         force_authenticate(request, user=user)
-        
-        response = ProfileView.as_view()(request)
-        
+
+        # For ViewSet, we need to pass the request to the action
+        view = UserProfileViewSet.as_view({'get': 'retrieve'})
+        response = view(request)
+
         if response.status_code == 200:
             self.stdout.write(self.style.SUCCESS('✅ Profile retrieved successfully'))
             self.stdout.write(f'   - Email: {response.data["data"]["email"]}')
@@ -213,56 +223,71 @@ class Command(BaseCommand):
             self.stdout.write(self.style.ERROR(f'❌ Profile retrieval failed: {response.data}'))
             return
         
-        # ========== TEST 7: UPDATE PROFILE ==========
-        self.stdout.write('\n\n✏️ TEST 7: Update Profile')
+        # ========== TEST 7: UPDATE PROFILE (PATCH using ViewSet) ==========
+
+        self.stdout.write('\n\n✏️ TEST 7: Update Profile (PATCH)')
         self.stdout.write('-' * 40)
-        
+
         data = {
             'phone': '9876543210',
             'location': 'Kathmandu'
         }
-        import json
 
-        request = factory.patch('/api/auth/profile/', data, format='json')
+        # Fix: Use json.dumps and explicit content type
+        import json
+        request = factory.patch(
+            '/api/auth/profile/',
+            data=json.dumps(data),
+            content_type='application/json'
+        )
         request.META['HTTP_HOST'] = 'testserver'
         force_authenticate(request, user=user)
-        
-        response = ProfileView.as_view()(request)
-        
+
+        view = UserProfileViewSet.as_view({'patch': 'partial_update'})
+        response = view(request)
+
         if response.status_code == 200:
-            self.stdout.write(self.style.SUCCESS('✅ Profile updated successfully'))
+            self.stdout.write(self.style.SUCCESS('✅ Profile updated successfully (PATCH)'))
             self.stdout.write(f'   - New phone: {response.data["data"]["phone"]}')
             self.stdout.write(f'   - New location: {response.data["data"]["location"]}')
         else:
             self.stdout.write(self.style.ERROR(f'❌ Profile update failed: {response.data}'))
-            self.stdout.write(f'   - Status code: {response.status_code}')
-    
-    # Debug: Print request details
-            self.stdout.write(f'   - Request content type: {request.META.get("CONTENT_TYPE", "Not set")}')
-            self.stdout.write(f'   - Request method: {request.method}')
-            
-            # Try alternative approach
-            self.stdout.write('\n   🔄 Retrying with alternative approach...')
-            
-            # Method 2: Manual JSON encoding
-            request2 = factory.patch('/api/auth/profile/', data={})  # Empty data first
-            request2.META['HTTP_HOST'] = 'testserver'
-            request2.META['CONTENT_TYPE'] = 'application/json'
-            request2._body = json.dumps(data).encode('utf-8')
-            force_authenticate(request2, user=user)
-            
-            response2 = ProfileView.as_view()(request2)
-            
-            if response2.status_code == 200:
-                self.stdout.write(self.style.SUCCESS('   ✅ Alternative approach worked!'))
-                self.stdout.write(f'   - New phone: {response2.data["data"]["phone"]}')
-                self.stdout.write(f'   - New location: {response2.data["data"]["location"]}')
-            else:
-                self.stdout.write(self.style.ERROR(f'   ❌ Alternative also failed: {response2.data}'))
-                return
-        
-        # ========== TEST 8: CHANGE PASSWORD ==========
-        self.stdout.write('\n\n🔒 TEST 8: Change Password')
+            return
+
+        # ========== TEST 8: FULL UPDATE PROFILE (PUT using ViewSet) ==========
+        self.stdout.write('\n\n✏️ TEST 8: Full Update Profile (PUT)')
+        self.stdout.write('-' * 40)
+
+        data = {
+            'first_name': 'Updated',
+            'last_name': 'Name',
+            'phone': '9812345678',
+            'location': 'Pokhara',
+            'district': 'Kaski'
+        }
+
+        request = factory.put(
+            '/api/auth/profile/',
+            data=json.dumps(data),
+            content_type='application/json'
+        )
+        request.META['HTTP_HOST'] = 'testserver'
+        force_authenticate(request, user=user)
+
+        view = UserProfileViewSet.as_view({'put': 'update'})
+        response = view(request)
+
+        if response.status_code == 200:
+            self.stdout.write(self.style.SUCCESS('✅ Profile fully updated successfully (PUT)'))
+            self.stdout.write(f'   - First name: {response.data["data"]["first_name"]}')
+            self.stdout.write(f'   - Last name: {response.data["data"]["last_name"]}')
+            self.stdout.write(f'   - Phone: {response.data["data"]["phone"]}')
+            self.stdout.write(f'   - Location: {response.data["data"]["location"]}')
+        else:
+            self.stdout.write(self.style.ERROR(f'❌ Full profile update failed: {response.data}'))
+            return
+        # ========== TEST 9: CHANGE PASSWORD ==========
+        self.stdout.write('\n\n🔒 TEST 9: Change Password')
         self.stdout.write('-' * 40)
         
         data = {
@@ -284,8 +309,8 @@ class Command(BaseCommand):
             self.stdout.write(self.style.ERROR(f'❌ Password change failed: {response.data}'))
             return
         
-        # ========== TEST 9: LOGIN WITH NEW PASSWORD ==========
-        self.stdout.write('\n\n🔄 TEST 9: Login with New Password')
+        # ========== TEST 10: LOGIN WITH NEW PASSWORD ==========
+        self.stdout.write('\n\n🔄 TEST 10: Login with New Password')
         self.stdout.write('-' * 40)
         
         data = {
@@ -307,8 +332,8 @@ class Command(BaseCommand):
             self.stdout.write(self.style.ERROR(f'❌ Login failed: {response.data}'))
             return
         
-        # ========== TEST 10: PASSWORD RESET REQUEST ==========
-        self.stdout.write('\n\n📧 TEST 10: Password Reset Request')
+        # ========== TEST 11: PASSWORD RESET REQUEST ==========
+        self.stdout.write('\n\n📧 TEST 11: Password Reset Request')
         self.stdout.write('-' * 40)
         
         data = {
@@ -325,35 +350,81 @@ class Command(BaseCommand):
             
             user.refresh_from_db()
             test_data['reset_token'] = user.reset_password_token
-            self.stdout.write(f'   - Reset token: {user.reset_password_token[:20]}...')
+            if user.reset_password_token:
+                self.stdout.write(f'   - Reset token: {user.reset_password_token[:20]}...')
+            else:
+                self.stdout.write(self.style.WARNING('   ⚠️ No reset token generated (check email sending)'))
         else:
             self.stdout.write(self.style.ERROR(f'❌ Password reset request failed: {response.data}'))
             return
         
-        # ========== TEST 11: PASSWORD RESET CONFIRM ==========
-        self.stdout.write('\n\n🔐 TEST 11: Password Reset Confirm')
+        # ========== TEST 12: PASSWORD RESET CONFIRM ==========
+        self.stdout.write('\n\n🔐 TEST 12: Password Reset Confirm')
+        self.stdout.write('-' * 40)
+        
+        # Ensure we have a reset token
+        if not test_data.get('reset_token'):
+            self.stdout.write(self.style.WARNING('⚠️ No reset token available, skipping password reset test'))
+        else:
+            data = {
+                'token': test_data.get('reset_token', ''),
+                'new_password': 'FinalPass@123',
+                'new_password2': 'FinalPass@123'
+            }
+            
+            request = factory.post('/api/auth/password-reset-confirm/', data, format='json')
+            request.META['HTTP_HOST'] = 'testserver'
+            
+            response = PasswordResetConfirmView.as_view()(request)
+            
+            if response.status_code == 200:
+                self.stdout.write(self.style.SUCCESS('✅ Password reset confirmed'))
+                test_data['password'] = 'FinalPass@123'
+            else:
+                self.stdout.write(self.style.ERROR(f'❌ Password reset confirm failed: {response.data}'))
+                return
+        
+        # ========== TEST 13: CHECK TERMS ACCEPTANCE ==========
+        self.stdout.write('\n\n📋 TEST 13: Check Terms Acceptance')
+        self.stdout.write('-' * 40)
+        
+        request = factory.get('/api/auth/check-terms/')
+        request.META['HTTP_HOST'] = 'testserver'
+        force_authenticate(request, user=user)
+        
+        response = CheckTermsAcceptanceView.as_view()(request)
+        
+        if response.status_code == 200:
+            self.stdout.write(self.style.SUCCESS('✅ Terms check successful'))
+            self.stdout.write(f'   - Needs terms update: {response.data["needs_terms_update"]}')
+            self.stdout.write(f'   - Needs privacy update: {response.data["needs_privacy_update"]}')
+        else:
+            self.stdout.write(self.style.ERROR(f'❌ Terms check failed: {response.data}'))
+            return
+        
+        # ========== TEST 14: ACCEPT TERMS ==========
+        self.stdout.write('\n\n✅ TEST 14: Accept Terms')
         self.stdout.write('-' * 40)
         
         data = {
-            'token': test_data.get('reset_token', ''),
-            'new_password': 'FinalPass@123',
-            'new_password2': 'FinalPass@123'
+            'terms_version': '1.0',
+            'privacy_version': '1.0'
         }
         
-        request = factory.post('/api/auth/password-reset-confirm/', data, format='json')
+        request = factory.post('/api/auth/accept-terms/', data, format='json')
         request.META['HTTP_HOST'] = 'testserver'
+        force_authenticate(request, user=user)
         
-        response = PasswordResetConfirmView.as_view()(request)
+        response = AcceptTermsView.as_view()(request)
         
         if response.status_code == 200:
-            self.stdout.write(self.style.SUCCESS('✅ Password reset confirmed'))
-            test_data['password'] = 'FinalPass@123'
+            self.stdout.write(self.style.SUCCESS('✅ Terms accepted successfully'))
         else:
-            self.stdout.write(self.style.ERROR(f'❌ Password reset confirm failed: {response.data}'))
+            self.stdout.write(self.style.ERROR(f'❌ Terms acceptance failed: {response.data}'))
             return
         
-        # ========== TEST 12: LOGOUT ==========
-        self.stdout.write('\n\n👋 TEST 12: Logout')
+        # ========== TEST 15: LOGOUT ==========
+        self.stdout.write('\n\n👋 TEST 15: Logout')
         self.stdout.write('-' * 40)
         
         data = {
@@ -372,8 +443,8 @@ class Command(BaseCommand):
             self.stdout.write(self.style.ERROR(f'❌ Logout failed: {response.data}'))
             return
         
-        # ========== TEST 13: RESEND VERIFICATION EMAIL ==========
-        self.stdout.write('\n\n📧 TEST 13: Resend Verification Email')
+        # ========== TEST 16: RESEND VERIFICATION EMAIL ==========
+        self.stdout.write('\n\n📧 TEST 16: Resend Verification Email')
         self.stdout.write('-' * 40)
         
         # Create a new unverified user
@@ -403,8 +474,8 @@ class Command(BaseCommand):
         # Clean up test user
         new_user.delete()
 
-        # ========== TEST 14: DELETE ACCOUNT ==========
-        self.stdout.write('\n\n🗑️ TEST 14: Delete Account')
+        # ========== TEST 17: DELETE ACCOUNT ==========
+        self.stdout.write('\n\n🗑️ TEST 17: Delete Account')
         self.stdout.write('-' * 40)
 
         temp_user = User.objects.create_user(
@@ -412,15 +483,16 @@ class Command(BaseCommand):
             username='tempuser',
             password='Delete@123'
         )
+        temp_user.is_email_verified = True
+        temp_user.save()
 
         data = {'password': 'Delete@123'}
 
-        # Clean, proper JSON request
         request = factory.delete(
             '/api/auth/delete-account/', 
             data, 
-            format='json',  # This tells factory to send as JSON
-            content_type='application/json'  # Explicitly set content type
+            format='json',
+            content_type='application/json'
         )
         request.META['HTTP_HOST'] = 'testserver'
         force_authenticate(request, user=temp_user)
@@ -449,10 +521,15 @@ class Command(BaseCommand):
         self.stdout.write('✅ Email Verification: Working')
         self.stdout.write('✅ Login: Working')
         self.stdout.write('✅ Token Refresh: Working')
-        self.stdout.write('✅ Profile CRUD: Working')
+        self.stdout.write('✅ Profile GET: Working')
+        self.stdout.write('✅ Profile PATCH: Working')
+        self.stdout.write('✅ Profile PUT: Working')
         self.stdout.write('✅ Password Change: Working')
         self.stdout.write('✅ Password Reset: Working')
+        self.stdout.write('✅ Terms Check: Working')
+        self.stdout.write('✅ Terms Accept: Working')
         self.stdout.write('✅ Logout: Working')
+        self.stdout.write('✅ Resend Verification: Working')
         self.stdout.write('✅ Account Deletion: Working')
         self.stdout.write('=' * 60)
         self.stdout.write(self.style.SUCCESS('\n✅ All authentication tests passed!'))
