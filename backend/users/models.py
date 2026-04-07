@@ -184,6 +184,7 @@ class User(AbstractUser):
     
     # ============ FARM FIELDS ============
     is_farmer = models.BooleanField(default=False)
+    is_admin = models.BooleanField(default=False)
     
     farm_name = models.CharField(
         max_length=100,

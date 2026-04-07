@@ -176,6 +176,12 @@ REST_FRAMEWORK = {
 SPECTACULAR_SETTINGS = {
     'TITLE': 'Agriflow API',
     'VERSION': '1.0.0',
+    'COMPONENT_SPLIT_REQUEST': True,  
+    'ENUM_NAME_OVERRIDES': {
+        'GenderEnum': 'users.models.GenderEnum',
+    },
+    'SCHEMA_PATH_PREFIX': '/api/',
+    'SERVE_INCLUDE_SCHEMA': True,
 }
 
 # JWT settings
