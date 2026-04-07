@@ -1,7 +1,7 @@
 from rest_framework import serializers
 from .models import (
     Crop, FertilizerRecord, PesticideRecord, 
-    CropExpense, CropIncome, HarvestRecord
+    CropExpense, CropIncome, HarvestRecord,Labour
 )
 
 # ==================== FERTILIZER SERIALIZER ====================
@@ -133,6 +133,45 @@ class HarvestRecordSerializer(serializers.ModelSerializer):
         if value <= 0:
             raise serializers.ValidationError("Quantity must be greater than 0")
         return value
+    
+class LaborSerializer(serializers.ModelSerializer):
+    """Serializer for labor records"""
+    
+    crop_name = serializers.CharField(source='crop.name', read_only=True)
+    user_username = serializers.CharField(source='user.username', read_only=True)
+    
+    class Meta:
+        model = Labour
+        fields = [
+            'id', 'user', 'user_username', 'crop', 'crop_name',
+            'name', 'workers_count', 'days', 'rate_per_day', 'total_cost',
+            'date', 'notes', 'created_at'
+        ]
+        read_only_fields = ['id', 'user', 'created_at', 'total_cost']
+
+
+class LaborCreateSerializer(serializers.ModelSerializer):
+    """Serializer for creating labor records"""
+    
+    class Meta:
+        model = Labour
+        fields = ['name', 'workers_count', 'days', 'rate_per_day', 'date', 'notes']
+    
+    def validate_workers_count(self, value):
+        if value <= 0:
+            raise serializers.ValidationError("Workers count must be greater than 0")
+        return value
+    
+    def validate_days(self, value):
+        if value <= 0:
+            raise serializers.ValidationError("Days must be greater than 0")
+        return value
+    
+    def validate_rate_per_day(self, value):
+        if value <= 0:
+            raise serializers.ValidationError("Rate per day must be greater than 0")
+        return value
+
 
 
 # ==================== MAIN CROP SERIALIZER ====================
@@ -153,6 +192,7 @@ class CropSerializer(serializers.ModelSerializer):
     expenses = CropExpenseSerializer(many=True, read_only=True)
     incomes = CropIncomeSerializer(many=True, read_only=True)
     harvests = HarvestRecordSerializer(many=True, read_only=True)
+    labour_records = LaborSerializer(many=True, read_only=True)
     
     # Financial calculations (properties from model)
     total_fertilizer_cost = serializers.DecimalField(max_digits=12, decimal_places=2, read_only=True)
@@ -161,6 +201,7 @@ class CropSerializer(serializers.ModelSerializer):
     total_expense = serializers.DecimalField(max_digits=12, decimal_places=2, read_only=True)
     total_income = serializers.DecimalField(max_digits=12, decimal_places=2, read_only=True)
     net_profit = serializers.DecimalField(max_digits=12, decimal_places=2, read_only=True)
+    total_labor_cost = serializers.DecimalField(max_digits=12, decimal_places=2, read_only=True)
     
     class Meta:
         model = Crop
@@ -176,11 +217,11 @@ class CropSerializer(serializers.ModelSerializer):
             'notes', 'created_at', 'updated_at',
             
             # Related records
-            'fertilizers', 'pesticides', 'expenses', 'incomes', 'harvests',
+            'fertilizers', 'pesticides', 'expenses', 'incomes', 'harvests','labour_records',
             
             # Financial calculations
             'total_fertilizer_cost', 'total_pesticide_cost', 'total_other_expense',
-            'total_expense', 'total_income', 'net_profit'
+            'total_expense', 'total_income', 'net_profit', 'total_labor_cost'
         ]
         read_only_fields = ['id', 'farmer', 'created_at', 'updated_at']
 
@@ -192,7 +233,7 @@ class FertilizerRecordCreateSerializer(serializers.ModelSerializer):
     
     class Meta:
         model = FertilizerRecord
-        fields = ['crop', 'fertilizer_type', 'name', 'quantity', 'unit', 'cost', 'application_date', 'notes']
+        fields = ['fertilizer_type', 'name', 'quantity', 'unit', 'cost', 'application_date', 'notes']
     
     def validate_cost(self, value):
         if value < 0:
@@ -205,7 +246,7 @@ class PesticideRecordCreateSerializer(serializers.ModelSerializer):
     
     class Meta:
         model = PesticideRecord
-        fields = ['crop', 'name', 'target_pest', 'quantity', 'unit', 'cost', 'application_date', 'notes']
+        fields = ['name', 'target_pest', 'quantity', 'unit', 'cost', 'application_date', 'notes']
     
     def validate_cost(self, value):
         if value < 0:
@@ -218,7 +259,7 @@ class CropExpenseCreateSerializer(serializers.ModelSerializer):
     
     class Meta:
         model = CropExpense
-        fields = ['crop', 'category', 'amount', 'date', 'description', 'vendor_name', 'vendor_contact', 'notes']
+        fields = ['category', 'amount', 'date', 'description', 'vendor_name', 'vendor_contact', 'notes']
     
     def validate_amount(self, value):
         if value <= 0:
@@ -231,7 +272,7 @@ class CropIncomeCreateSerializer(serializers.ModelSerializer):
     
     class Meta:
         model = CropIncome
-        fields = ['crop', 'source', 'amount', 'date', 'description', 'buyer_name', 'buyer_contact', 'notes']
+        fields = ['source', 'amount', 'date', 'description', 'buyer_name', 'buyer_contact', 'notes']
     
     def validate_amount(self, value):
         if value <= 0:
@@ -244,7 +285,7 @@ class HarvestRecordCreateSerializer(serializers.ModelSerializer):
     
     class Meta:
         model = HarvestRecord
-        fields = ['crop', 'harvest_date', 'quantity', 'unit', 'quality', 'notes']
+        fields = ['harvest_date', 'quantity', 'unit', 'quality', 'notes']
     
     def validate_quantity(self, value):
         if value <= 0:

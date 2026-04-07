@@ -300,7 +300,7 @@ class Labour(models.Model):
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     user = models.ForeignKey(User, on_delete=models.CASCADE, related_name='labour_records')
     crop = models.ForeignKey(Crop, on_delete=models.CASCADE, related_name='labour_records')
-
+    
     name = models.CharField(max_length=255)
     workers_count = models.PositiveIntegerField(default=1)
     days = models.PositiveIntegerField(default=1)
@@ -320,6 +320,7 @@ class Labour(models.Model):
         return f"{self.name} - {self.workers_count} workers × {self.days} days"
     
     def save(self, *args, **kwargs):
+        # Auto-calculate total cost before saving
         self.total_cost = self.workers_count * self.days * self.rate_per_day
         super().save(*args, **kwargs)
     
