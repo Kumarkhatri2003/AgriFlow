@@ -8,7 +8,7 @@ from django.contrib.auth import logout as django_logout
 from .serializers import (
     RegisterSerializer, UserSerializer, LoginSerializer, 
     PasswordResetRequestSerializer, PasswordResetConfirmSerializer, 
-    ChangePasswordSerializer
+    ChangePasswordSerializer,UpdateUserProfileSerializer, UserProfileSerializer,
 )
 from .models import User
 from django.utils import timezone
@@ -17,6 +17,7 @@ from django.conf import settings
 
 # Create your views here.
 
+#-------Register-------------
 class RegisterView(APIView):
     permission_classes = [AllowAny]
 
@@ -38,6 +39,8 @@ class RegisterView(APIView):
             'error': serializer.errors
         }, status=status.HTTP_400_BAD_REQUEST)
 
+
+#------Login----------------
 class LoginView(APIView):
     permission_classes = [AllowAny]
 
@@ -260,38 +263,34 @@ class ProfileView(APIView):
     permission_classes = [IsAuthenticated]
 
     def get(self, request):
-        serializer = UserSerializer(request.user)
+        serializer = UserProfileSerializer(request.user)
         return Response({
             'success': True,
             'data': serializer.data
         })
 
     def put(self, request):
-        serializer = UserSerializer(request.user, data=request.data, partial=False)
+        serializer = UpdateUserProfileSerializer(request.user, data=request.data, partial=False)
         
         if serializer.is_valid():
             serializer.save()
-            return Response({
-                'success': True,
-                'message': 'Profile updated successfully',
-                'data': serializer.data
-            })
+            profile_data = UserProfileSerializer(request.user).data
+            return Response({'success': True, 'data': profile_data})
         
         return Response({
             'success': False,
             'errors': serializer.errors
-        }, status=status.HTTP_400_BAD_REQUEST)
+            }, status=status.HTTP_400_BAD_REQUEST)
+        
+       
 
     def patch(self, request):
-        serializer = UserSerializer(request.user, data=request.data, partial=True)
+        serializer = UpdateUserProfileSerializer(request.user, data=request.data, partial=True)
         
         if serializer.is_valid():
             serializer.save()
-            return Response({
-                'success': True,
-                'message': 'Profile updated successfully',
-                'data': serializer.data
-            })
+            profile_data = UserProfileSerializer(request.user).data
+            return Response({'success': True, 'data': profile_data})
         
         return Response({
             'success': False,
