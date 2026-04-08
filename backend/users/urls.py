@@ -14,7 +14,7 @@ urlpatterns = [
     path('resend-verification/', views.ResendVerificationView.as_view(), name='resend_verification'),
     
     # Password reset URLs
-    path('password-reset/', views.PasswordResetRequestView.as_view(), name='password_reset'),
+    path('password-reset/', views.PasswordResetRequestView.as_view(), name='password_reset/'),
     path('password-reset/confirm/', views.PasswordResetConfirmView.as_view(), name='password_reset_confirm'),
     path('change-password/', views.ChangePasswordView.as_view(), name='change_password'),
     
