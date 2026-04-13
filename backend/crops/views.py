@@ -1,12 +1,18 @@
-# crops/views.py
 from rest_framework import generics, permissions, status
 from rest_framework.response import Response
+from rest_framework.views import APIView
+from rest_framework.permissions import IsAuthenticated
 from django.shortcuts import get_object_or_404
+
+from .expert_system import get_recommendations
 from .models import (
-    Crop, FertilizerRecord, PesticideRecord, 
-    CropExpense, CropIncome, HarvestRecord, Labour
+    Crop, CropRecommendationHistory, FertilizerRecord, PesticideRecord, 
+    CropExpense, CropIncome, HarvestRecord, Labour,CropKnowledgeBase
 )
+
 from .serializers import (
+    CropRecommendationHistorySerializer,
+    CropRecommendationRequestSerializer,
     CropSerializer,
     FertilizerRecordSerializer,
     FertilizerRecordCreateSerializer,
@@ -20,6 +26,7 @@ from .serializers import (
     HarvestRecordCreateSerializer,
     LaborSerializer,
     LaborCreateSerializer,
+
 )
 import uuid
 
@@ -388,3 +395,77 @@ class CropLaborView(generics.ListCreateAPIView):
             crop_pk = uuid.UUID(crop_pk)
         crop = get_object_or_404(Crop, id=crop_pk, farmer=self.request.user)
         serializer.save(user=self.request.user, crop=crop)
+        
+
+class CropRecommendationView(APIView):
+    
+    permission_classes = [IsAuthenticated]
+
+    def post(self, request):
+        serializer = CropRecommendationRequestSerializer(data=request.data)
+        if not serializer.is_valid():
+            return Response({
+                'success': False,
+                'errors': serializer.errors
+            }, status=status.HTTP_400_BAD_REQUEST)
+
+        farmer_data = serializer.validated_data
+
+        crops_qs = CropKnowledgeBase.objects.all()
+
+        # Run recommendation engine
+        result = get_recommendations(crops_qs, farmer_data)
+
+        if not result.get('success'):
+            return Response(result, status=status.HTTP_404_NOT_FOUND)
+
+        history_data = {
+            'farmer': request.user,
+            'soil_type': farmer_data.get('soil_type', 'loamy'),
+            'ph': farmer_data.get('ph'),
+            'season': farmer_data.get('season'),
+            'water_availability': farmer_data.get('water_source', 'rainfed_only'),
+            'region': farmer_data.get('region', 'terai'),
+            'temperature': farmer_data.get('temperature_override'),
+            'frost_risk': farmer_data.get('elevation_risk'),
+            'experience': farmer_data.get('labor_availability', 'medium'),  
+            'goal': farmer_data.get('farming_goal', 'mixed'),
+            'recommendations': result.get('recommendations', [])
+        }
+        CropRecommendationHistory.objects.create(**history_data)
+
+        return Response(result, status=status.HTTP_200_OK)
+
+
+class CropRecommendationHistoryView(APIView):
+    
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request):
+        history = CropRecommendationHistory.objects.filter(farmer=request.user).order_by('-created_at')[:20]
+        serializer = CropRecommendationHistorySerializer(history, many=True)
+        return Response({
+            'success': True,
+            'count': len(history),
+            'history': serializer.data
+        })
+
+    def delete(self, request, history_id=None):
+        if not history_id:
+            return Response({
+                'success': False,
+                'error': 'History ID is required'
+            }, status=status.HTTP_400_BAD_REQUEST)
+
+        try:
+            history = CropRecommendationHistory.objects.get(id=history_id, farmer=request.user)
+            history.delete()
+            return Response({
+                'success': True,
+                'message': 'History entry deleted'
+            })
+        except CropRecommendationHistory.DoesNotExist:
+            return Response({
+                'success': False,
+                'error': 'History entry not found'
+            }, status=status.HTTP_404_NOT_FOUND)

@@ -38,4 +38,8 @@ urlpatterns = [
     path('<uuid:crop_pk>/incomes/', views.CropIncomesView.as_view(), name='crop-incomes'),
     path('<uuid:crop_pk>/harvests/', views.CropHarvestsView.as_view(), name='crop-harvests'),
     path('<uuid:crop_pk>/labor/', views.CropLaborView.as_view(), name='crop-labor'),
+    
+   path('recommend/', views.CropRecommendationView.as_view(), name='crop-recommend'),
+    path('recommend/history/', views.CropRecommendationHistoryView.as_view(), name='recommend-history'),
+    path('recommend/history/<int:history_id>/', views.CropRecommendationHistoryView.as_view(), name='recommend-history-detail'),
 ]
