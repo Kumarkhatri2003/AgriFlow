@@ -2,6 +2,8 @@ from django.db import models
 from django.contrib.auth import get_user_model
 import uuid
 
+from django.conf import settings
+
 User = get_user_model()
 
 class Crop(models.Model):
@@ -318,11 +320,109 @@ class Labour(models.Model):
     
     def __str__(self):
         return f"{self.name} - {self.workers_count} workers × {self.days} days"
-    
-    def save(self, *args, **kwargs):
-        # Auto-calculate total cost before saving
-        self.total_cost = self.workers_count * self.days * self.rate_per_day
-        super().save(*args, **kwargs)
-    
+
     class Meta:
         ordering = ['-date']
+        
+        
+
+class CropKnowledgeBase(models.Model):
+    # Basic info
+    name_en = models.CharField(max_length=100, unique=True)
+    name_np = models.CharField(max_length=100, blank=True)
+    
+    CATEGORY_CHOICES = [
+        ('cereal', 'Cereal'),
+        ('pulse', 'Pulse'),
+        ('cash_crop', 'Cash Crop'),
+        ('vegetable', 'Vegetable'),
+    ]
+    category = models.CharField(max_length=20, choices=CATEGORY_CHOICES)
+    
+    # Season
+    SEASON_CHOICES = [
+        ('spring', 'Spring'),
+        ('monsoon', 'Monsoon'),
+        ('autumn', 'Autumn'),
+        ('winter', 'Winter'),
+    ]
+    best_season = models.CharField(max_length=20, choices=SEASON_CHOICES)
+    other_seasons = models.CharField(max_length=200, blank=True, help_text="Comma separated: spring,autumn")
+    
+    # Temperature
+    temp_min = models.FloatField(help_text="Minimum temperature (°C)")
+    temp_max = models.FloatField(help_text="Maximum temperature (°C)")
+    temp_ideal = models.FloatField(help_text="Ideal temperature (°C)")
+    
+    # Soil
+    soil_ideal = models.CharField(max_length=50)
+    soil_other = models.CharField(max_length=200, blank=True, help_text="Comma separated: clay,silty")
+    
+    # pH
+    ph_min = models.FloatField()
+    ph_max = models.FloatField()
+    ph_ideal = models.FloatField()
+    
+    # Water & Region
+    WATER_CHOICES = [('low', 'Low'), ('medium', 'Medium'), ('high', 'High')]
+    water_req = models.CharField(max_length=10, choices=WATER_CHOICES)
+    region_suitable = models.CharField(max_length=200, help_text="Comma separated: terai,mid-hill,hill,mountain")
+    
+    # Tolerances
+    DROUGHT_CHOICES = [('low', 'Low'), ('medium', 'Medium'), ('high', 'High')]
+    drought_tolerance = models.CharField(max_length=10, choices=DROUGHT_CHOICES)
+    FROST_CHOICES = [
+    ('yes', 'Yes (Frost kills it)'),
+    ('no', 'No (Tolerant)'),
+    ('tolerant', 'Tolerant (May survive light frost)'),
+    ]
+    frost_sensitive = models.CharField(max_length=10, choices=FROST_CHOICES, default='no')
+    
+    # Labor & Storage
+    LABOR_CHOICES = [('low', 'Low'), ('medium', 'Medium'), ('high', 'High')]
+    labor_req = models.CharField(max_length=10, choices=LABOR_CHOICES)
+    STORAGE_CHOICES = [
+        ('very_short', 'Very Short (<1 week)'),
+        ('short', 'Short (1-4 weeks)'),
+        ('medium', 'Medium (1-3 months)'),
+        ('long', 'Long (>3 months)'),
+    ]
+    storage_life = models.CharField(max_length=20, choices=STORAGE_CHOICES)
+    
+    # NPK needs
+    n_need = models.FloatField(default=60, help_text="Nitrogen requirement (kg/hectare) - Low:20-40, Medium:40-80, High:80-120")
+    p_need = models.FloatField(default=40, help_text="Phosphorus requirement (kg/hectare) - Low:10-30, Medium:30-60, High:60-90")
+    k_need = models.FloatField(default=40, help_text="Potassium requirement (kg/hectare) - Low:10-30, Medium:30-60, High:60-90")
+    
+    # Metadata
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+    
+    class Meta:
+        ordering = ['name_en']
+    
+    def __str__(self):
+        return self.name_en
+    
+    
+    
+class CropRecommendationHistory(models.Model):
+    farmer = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE)
+    soil_type = models.CharField(max_length=50)
+    ph = models.FloatField()
+    season = models.CharField(max_length=50)
+    water_availability = models.CharField(max_length=20)
+    region = models.CharField(max_length=50)
+    temperature = models.FloatField(null=True, blank=True)
+    frost_risk = models.BooleanField(null=True,blank=True,default=True) 
+    experience = models.CharField(max_length=20, default='medium')
+    goal = models.CharField(max_length=20, default='mixed')
+    recommendations = models.JSONField()  # Store the recommendations JSON
+    created_at = models.DateTimeField(auto_now_add=True)
+    
+    class Meta:
+        ordering = ['-created_at']
+    
+    def __str__(self):
+        return f"{self.farmer.username} - {self.created_at.date()}"
+    
