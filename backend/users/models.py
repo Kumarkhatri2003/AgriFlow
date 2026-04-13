@@ -91,8 +91,7 @@ class User(AbstractUser):
     REGION_CHOICES = [
         ('terai', 'Terai Region'),
         ('hilly', 'Hilly Region'),
-        ('mountain', 'Mountain Region'),
-        ('kathmandu_valley', 'Kathmandu Valley'),
+        ('himalayan', 'himalayan'),
     ]
     
     # ============ SOIL TYPES ============
