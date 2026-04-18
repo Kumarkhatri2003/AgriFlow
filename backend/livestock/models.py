@@ -39,7 +39,7 @@ class Animal(models.Model):
     
     # Birth/acquisition info
     birth_date = models.DateField(null=True, blank=True)
-    acquisition_date = models.DateField()
+    acquisition_date = models.DateField(null=True, blank=True)
     acquisition_cost = models.DecimalField(max_digits=12, decimal_places=2, default=0)
     
     # Gender
