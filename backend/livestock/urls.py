@@ -15,6 +15,15 @@ urlpatterns = [
     path('animals/pregnant/', views.PregnantAnimalView.as_view(), name='pregnant-animals'),
     path('animals/active/', views.ActiveAnimalsView.as_view(), name='active-animals'),
     
+    # ============ NESTED URLs (Move these UP - before top-level URLs) ============
+    path('animals/<uuid:animal_pk>/vaccinations/', views.AnimalVaccinationsView.as_view(), name='animal-vaccinations'),
+    path('animals/<uuid:animal_pk>/health-records/', views.AnimalHealthRecordsView.as_view(), name='animal-health'),
+    path('animals/<uuid:animal_pk>/milk-records/', views.AnimalMilkRecordsView.as_view(), name='animal-milk'),
+    path('animals/<uuid:animal_pk>/breeding-records/', views.AnimalBreedingRecordsView.as_view(), name='animal-breeding'),
+    path('animals/<uuid:animal_pk>/incomes/', views.AnimalIncomesView.as_view(), name='animal-incomes'),
+    path('animals/<uuid:animal_pk>/expenses/', views.AnimalExpensesView.as_view(), name='animal-expenses'),
+    
+    # ============ Top-level URLs (Move these DOWN) ============
     # Vaccination URLs
     path('vaccinations/', views.VaccinationRecordListCreateView.as_view(), name='vaccination-list'),
     path('vaccinations/<uuid:pk>/', views.VaccinationRecordDetailView.as_view(), name='vaccination-detail'),
@@ -38,12 +47,4 @@ urlpatterns = [
     # Animal Expense URLs
     path('expenses/', views.AnimalExpenseListCreateView.as_view(), name='expense-list'),
     path('expenses/<uuid:pk>/', views.AnimalExpenseDetailView.as_view(), name='expense-detail'),
-    
-    # Nested URLs (under specific animal)
-    path('animals/<uuid:animal_pk>/vaccinations/', views.AnimalVaccinationsView.as_view(), name='animal-vaccinations'),
-    path('animals/<uuid:animal_pk>/health-records/', views.AnimalHealthRecordsView.as_view(), name='animal-health'),
-    path('animals/<uuid:animal_pk>/milk-records/', views.AnimalMilkRecordsView.as_view(), name='animal-milk'),
-    path('animals/<uuid:animal_pk>/breeding-records/', views.AnimalBreedingRecordsView.as_view(), name='animal-breeding'),
-    path('animals/<uuid:animal_pk>/incomes/', views.AnimalIncomesView.as_view(), name='animal-incomes'),
-    path('animals/<uuid:animal_pk>/expenses/', views.AnimalExpensesView.as_view(), name='animal-expenses'),
 ]

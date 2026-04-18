@@ -222,71 +222,61 @@ class AnimalIncomeListCreateView(generics.ListCreateAPIView):
     permission_classes = [permissions.IsAuthenticated]
     
     def get_queryset(self):
-        return AnimalIncome.objects.filter(animal__farmer = self.request.user)
+        return AnimalIncome.objects.filter(animal__farmer=self.request.user)
     
-    def perform_create(self,serializer):
-        
+    def perform_create(self, serializer):
         animal_id = self.request.data.get('animal')
-        animal = get_object_or_404(Animal,id=animal_id, farmer =self.request.user)
-        
-        serializer.save(user=self.request.user,animal=animal)
-        
-        
+        animal = get_object_or_404(Animal, id=animal_id, farmer=self.request.user)
+        serializer.save(user=self.request.user, animal=animal)
+
 
 class AnimalIncomeDetailView(generics.RetrieveUpdateDestroyAPIView):
-    """Get, Update or delete a specific animal income rocords"""
+    """Get, Update or delete a specific animal income records"""
+    
+    serializer_class = AnimalIncomeSerializer  # ← ADD THIS
+    permission_classes = [permissions.IsAuthenticated]  # ← ADD THIS
     
     def get_queryset(self):
-        return AnimalIncome.objects.filter(animal__farmer = self.request.user)
-    
+        return AnimalIncome.objects.filter(animal__farmer=self.request.user)
     
     def perform_update(self, serializer):
-        
         if 'animal' in self.request.data:
             animal_id = self.request.data.get('animal')
-            get_object_or_404(Animal,id=animal_id,farmer = self.request.user)
-            
+            get_object_or_404(Animal, id=animal_id, farmer=self.request.user)
         serializer.save()
-        
-#-------------------Animal Expense Views-------------------------
 
+
+#-------------------Animal Expense Views-------------------------
 class AnimalExpenseListCreateView(generics.ListCreateAPIView):
     """List all animal expenses or create a new expense record"""
     
     serializer_class = AnimalExpenseSerializer
-    permission_classes=[permissions.IsAuthenticated]
-    
+    permission_classes = [permissions.IsAuthenticated]
     
     def get_queryset(self):
-        return AnimalExpense.objects.filter(animal__farmer = self.request.user)
+        return AnimalExpense.objects.filter(animal__farmer=self.request.user)
     
     def perform_create(self, serializer):
         animal_id = self.request.data.get('animal')
-        animal = get_object_or_404(Animal,id = animal_id,farmer = self.request.user)
-        
-        serializer.save(user=self.request.user,animal=animal)
-        
-        
+        animal = get_object_or_404(Animal, id=animal_id, farmer=self.request.user)
+        serializer.save(user=self.request.user, animal=animal)
+
+
 class AnimalExpenseDetailView(generics.RetrieveUpdateDestroyAPIView):
     """Get, update or delete a specific animal expense record"""
     
-    serializer_class = AnimalExpenseSerializer
-    permission_classes = [permissions.IsAuthenticated]
-    
+    serializer_class = AnimalExpenseSerializer  # ← ADD THIS (already there)
+    permission_classes = [permissions.IsAuthenticated]  # ← ADD THIS
     
     def get_queryset(self):
-        return AnimalExpense.objects.filter(animal__farmer = self.request.user)
+        return AnimalExpense.objects.filter(animal__farmer=self.request.user)
     
     def perform_update(self, serializer):
         # If animal is being changed, verify it belongs to user
         if 'animal' in self.request.data:
             animal_id = self.request.data.get('animal')
-            get_object_or_404(Animal,id=animal_id,farmer=self.request.user)
-            
-        serializer.saver()
-
-
-
+            get_object_or_404(Animal, id=animal_id, farmer=self.request.user)
+        serializer.save() 
 # ==================== NESTED VIEWS (UNDER SPECIFIC ANIMAL) ====================
 
 class AnimalVaccinationsView(generics.ListCreateAPIView):
