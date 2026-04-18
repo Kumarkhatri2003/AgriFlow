@@ -1,6 +1,11 @@
 from pathlib import Path
 from datetime import timedelta
 from pathlib import Path
+from dotenv import load_dotenv
+import os
+
+# Load environment variables from .env file
+load_dotenv()
 
 # Build paths inside the project like this: BASE_DIR / 'subdir'.
 BASE_DIR = Path(__file__).resolve().parent.parent
@@ -33,6 +38,8 @@ INSTALLED_APPS = [
     'rest_framework_simplejwt',
     'rest_framework_simplejwt.token_blacklist',
     'corsheaders',
+    'drf_yasg',
+    'drf_spectacular',
 
     #ourown
     'users',
@@ -43,6 +50,7 @@ INSTALLED_APPS = [
 ]
 
 MIDDLEWARE = [
+    "corsheaders.middleware.CorsMiddleware",
     'django.middleware.security.SecurityMiddleware',
     'django.contrib.sessions.middleware.SessionMiddleware',
     'django.middleware.common.CommonMiddleware',
@@ -50,6 +58,13 @@ MIDDLEWARE = [
     'django.contrib.auth.middleware.AuthenticationMiddleware',
     'django.contrib.messages.middleware.MessageMiddleware',
     'django.middleware.clickjacking.XFrameOptionsMiddleware',
+]
+
+CORS_ALLOWED_ORIGINS = [
+    "http://localhost:3000",
+    "http://localhost:5173",   
+    "http://localhost:5174",   
+    "http://127.0.0.1:5173",
 ]
 
 ROOT_URLCONF = 'config.urls'
@@ -155,6 +170,18 @@ REST_FRAMEWORK = {
     'DEFAULT_RENDERER_CLASSES': (
         'rest_framework.renderers.JSONRenderer',
     ),
+    'DEFAULT_SCHEMA_CLASS': 'drf_spectacular.openapi.AutoSchema',
+}
+
+SPECTACULAR_SETTINGS = {
+    'TITLE': 'Agriflow API',
+    'VERSION': '1.0.0',
+    'COMPONENT_SPLIT_REQUEST': True,  
+    'ENUM_NAME_OVERRIDES': {
+        'GenderEnum': 'users.models.GenderEnum',
+    },
+    'SCHEMA_PATH_PREFIX': '/api/',
+    'SERVE_INCLUDE_SCHEMA': True,
 }
 
 # JWT settings
@@ -181,3 +208,6 @@ CORS_ALLOW_CREDENTIALS = True
 # Email settings (development)
 EMAIL_BACKEND = 'django.core.mail.backends.console.EmailBackend'
 DEFAULT_FROM_EMAIL = 'AgriFlow <noreply@agriflow.com>'
+
+# Frontend URL for email links
+FRONTEND_URL = os.environ.get('FRONTEND_URL', 'http://localhost:3000')

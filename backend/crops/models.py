@@ -2,11 +2,13 @@ from django.db import models
 from django.contrib.auth import get_user_model
 import uuid
 
+from django.conf import settings
+
 User = get_user_model()
 
 class Crop(models.Model):
     """Main crop model"""
-    
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     farmer = models.ForeignKey(User, on_delete=models.CASCADE, related_name='crops')
 
     # Basic Information
@@ -75,6 +77,12 @@ class Crop(models.Model):
         return self.pesticides.aggregate(total=Sum('cost'))['total'] or 0
     
     @property
+    def total_labor_cost(self):
+        """Sum of all labor costs"""
+        from django.db.models import Sum
+        return self.labour_records.aggregate(total=Sum('total_cost'))['total'] or 0
+    
+    @property
     def total_other_expense(self):
         """Sum of all other expenses (labor, rent, seeds, etc.)"""
         from django.db.models import Sum
@@ -83,7 +91,7 @@ class Crop(models.Model):
     @property
     def total_expense(self):
         """Total of ALL expenses"""
-        return self.total_fertilizer_cost + self.total_pesticide_cost + self.total_other_expense
+        return self.total_fertilizer_cost + self.total_pesticide_cost +self.total_labor_cost + self.total_other_expense
 
     @property
     def total_income(self):
@@ -188,7 +196,7 @@ class CropExpense(models.Model):
     user = models.ForeignKey(User, on_delete=models.CASCADE, related_name='crop_expenses')
     crop = models.ForeignKey(Crop, on_delete=models.CASCADE, related_name='expenses')
 
-    #Notice: fertilizer and pesticide are NOT in this list!
+   
     EXPENSE_CATEGORIES = [
         ('seed', 'Seeds (बीउ)'),
         ('labor', 'Labor (ज्याला)'),
@@ -286,3 +294,135 @@ class HarvestRecord(models.Model):
 
     def __str__(self):
         return f"{self.crop.name} - {self.quantity}{self.unit} on {self.harvest_date}"
+
+
+class Labour(models.Model):
+    """Track labor details for crop activities"""
+
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    user = models.ForeignKey(User, on_delete=models.CASCADE, related_name='labour_records')
+    crop = models.ForeignKey(Crop, on_delete=models.CASCADE, related_name='labour_records')
+    
+    name = models.CharField(max_length=255)
+    workers_count = models.PositiveIntegerField(default=1)
+    days = models.PositiveIntegerField(default=1)
+    rate_per_day = models.DecimalField(max_digits=10, decimal_places=2, default=0)
+    total_cost = models.DecimalField(max_digits=12, decimal_places=2, default=0)
+    
+    date = models.DateField(null=True, blank=True)
+    notes = models.TextField(blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    
+    def save(self, *args, **kwargs):
+        # Auto-calculate total cost
+        self.total_cost = self.workers_count * self.days * self.rate_per_day
+        super().save(*args, **kwargs)
+    
+    def __str__(self):
+        return f"{self.name} - {self.workers_count} workers × {self.days} days"
+
+    class Meta:
+        ordering = ['-date']
+        
+        
+
+class CropKnowledgeBase(models.Model):
+    # Basic info
+    name_en = models.CharField(max_length=100, unique=True)
+    name_np = models.CharField(max_length=100, blank=True)
+    
+    CATEGORY_CHOICES = [
+        ('cereal', 'Cereal'),
+        ('pulse', 'Pulse'),
+        ('cash_crop', 'Cash Crop'),
+        ('vegetable', 'Vegetable'),
+    ]
+    category = models.CharField(max_length=20, choices=CATEGORY_CHOICES)
+    
+    # Season
+    SEASON_CHOICES = [
+        ('spring', 'Spring'),
+        ('monsoon', 'Monsoon'),
+        ('autumn', 'Autumn'),
+        ('winter', 'Winter'),
+    ]
+    best_season = models.CharField(max_length=20, choices=SEASON_CHOICES)
+    other_seasons = models.CharField(max_length=200, blank=True, help_text="Comma separated: spring,autumn")
+    
+    # Temperature
+    temp_min = models.FloatField(help_text="Minimum temperature (°C)")
+    temp_max = models.FloatField(help_text="Maximum temperature (°C)")
+    temp_ideal = models.FloatField(help_text="Ideal temperature (°C)")
+    
+    # Soil
+    soil_ideal = models.CharField(max_length=50)
+    soil_other = models.CharField(max_length=200, blank=True, help_text="Comma separated: clay,silty")
+    
+    # pH
+    ph_min = models.FloatField()
+    ph_max = models.FloatField()
+    ph_ideal = models.FloatField()
+    
+    # Water & Region
+    WATER_CHOICES = [('low', 'Low'), ('medium', 'Medium'), ('high', 'High')]
+    water_req = models.CharField(max_length=10, choices=WATER_CHOICES)
+    region_suitable = models.CharField(max_length=200, help_text="Comma separated: terai,mid-hill,hill,mountain")
+    
+    # Tolerances
+    DROUGHT_CHOICES = [('low', 'Low'), ('medium', 'Medium'), ('high', 'High')]
+    drought_tolerance = models.CharField(max_length=10, choices=DROUGHT_CHOICES)
+    FROST_CHOICES = [
+    ('yes', 'Yes (Frost kills it)'),
+    ('no', 'No (Tolerant)'),
+    ('tolerant', 'Tolerant (May survive light frost)'),
+    ]
+    frost_sensitive = models.CharField(max_length=10, choices=FROST_CHOICES, default='no')
+    
+    # Labor & Storage
+    LABOR_CHOICES = [('low', 'Low'), ('medium', 'Medium'), ('high', 'High')]
+    labor_req = models.CharField(max_length=10, choices=LABOR_CHOICES)
+    STORAGE_CHOICES = [
+        ('very_short', 'Very Short (<1 week)'),
+        ('short', 'Short (1-4 weeks)'),
+        ('medium', 'Medium (1-3 months)'),
+        ('long', 'Long (>3 months)'),
+    ]
+    storage_life = models.CharField(max_length=20, choices=STORAGE_CHOICES)
+    
+    # NPK needs
+    n_need = models.FloatField(default=60, help_text="Nitrogen requirement (kg/hectare) - Low:20-40, Medium:40-80, High:80-120")
+    p_need = models.FloatField(default=40, help_text="Phosphorus requirement (kg/hectare) - Low:10-30, Medium:30-60, High:60-90")
+    k_need = models.FloatField(default=40, help_text="Potassium requirement (kg/hectare) - Low:10-30, Medium:30-60, High:60-90")
+    
+    # Metadata
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+    
+    class Meta:
+        ordering = ['name_en']
+    
+    def __str__(self):
+        return self.name_en
+    
+    
+    
+class CropRecommendationHistory(models.Model):
+    farmer = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE)
+    soil_type = models.CharField(max_length=50)
+    ph = models.FloatField()
+    season = models.CharField(max_length=50)
+    water_availability = models.CharField(max_length=20)
+    region = models.CharField(max_length=50)
+    temperature = models.FloatField(null=True, blank=True)
+    frost_risk = models.BooleanField(null=True,blank=True,default=True) 
+    experience = models.CharField(max_length=20, default='medium')
+    goal = models.CharField(max_length=20, default='mixed')
+    recommendations = models.JSONField()  # Store the recommendations JSON
+    created_at = models.DateTimeField(auto_now_add=True)
+    
+    class Meta:
+        ordering = ['-created_at']
+    
+    def __str__(self):
+        return f"{self.farmer.username} - {self.created_at.date()}"
+    

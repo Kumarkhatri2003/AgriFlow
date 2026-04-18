@@ -138,9 +138,9 @@ def update_financial_summaries(user, transaction_date):
     )
     
     daily_income = daily_trans.filter(transaction_type__contains='income').aggregate(
-        total=Sum('amount'))['amount__sum'] or 0
+        total=Sum('amount')).get('total')or 0
     daily_expense = daily_trans.filter(transaction_type__contains='expense').aggregate(
-        total=Sum('amount'))['amount__sum'] or 0
+        total=Sum('amount')).get('total') or 0
     
     # Get previous day for trend
     yesterday = today - timedelta(days=1)
@@ -198,9 +198,9 @@ def update_financial_summaries(user, transaction_date):
     )
     
     month_income = month_trans.filter(transaction_type__contains='income').aggregate(
-        total=Sum('amount'))['amount__sum'] or 0
+        total=Sum('amount')).get('total') or 0
     month_expense = month_trans.filter(transaction_type__contains='expense').aggregate(
-        total=Sum('amount'))['amount__sum'] or 0
+        total=Sum('amount')).get('total') or 0
     
     # Get previous month for trend
     if today.month == 1:

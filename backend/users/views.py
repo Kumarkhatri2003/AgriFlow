@@ -1,30 +1,36 @@
-from rest_framework import status
+from rest_framework import status, generics, viewsets, mixins
 from rest_framework.response import Response
 from rest_framework.permissions import AllowAny, IsAuthenticated
 from rest_framework.views import APIView
-from .utils import send_verification_email, send_password_reset_email
+from rest_framework.decorators import action
 from rest_framework_simplejwt.tokens import RefreshToken
+from rest_framework_simplejwt.views import TokenRefreshView
 from django.contrib.auth import logout as django_logout
+from django.utils import timezone
+from django.conf import settings
+from .utils import send_verification_email, send_password_reset_email
 from .serializers import (
     RegisterSerializer, UserSerializer, LoginSerializer, 
     PasswordResetRequestSerializer, PasswordResetConfirmSerializer, 
-    ChangePasswordSerializer
+    ChangePasswordSerializer, UpdateUserProfileSerializer, UserProfileSerializer,
 )
 from .models import User
-from django.utils import timezone
 import uuid
 
-# Create your views here.
 
-class RegisterView(APIView):
+# ==================== AUTHENTICATION VIEWS ====================
+
+class RegisterView(generics.CreateAPIView):
+    """User registration endpoint"""
     permission_classes = [AllowAny]
+    serializer_class = RegisterSerializer
 
-    def post(self, request):
-        serializer = RegisterSerializer(data=request.data)
+    def create(self, request, *args, **kwargs):
+        serializer = self.get_serializer(data=request.data)
         
         if serializer.is_valid():
             user = serializer.save()
-            send_verification_email(user, request)
+            send_verification_email(user)
 
             return Response({
                 'success': True,
@@ -37,11 +43,14 @@ class RegisterView(APIView):
             'error': serializer.errors
         }, status=status.HTTP_400_BAD_REQUEST)
 
-class LoginView(APIView):
+
+class LoginView(generics.GenericAPIView):
+    """User login endpoint"""
     permission_classes = [AllowAny]
+    serializer_class = LoginSerializer
 
     def post(self, request):
-        serializer = LoginSerializer(data=request.data)
+        serializer = self.get_serializer(data=request.data)
 
         if serializer.is_valid():
             return Response({
@@ -55,33 +64,44 @@ class LoginView(APIView):
             'errors': serializer.errors
         }, status=status.HTTP_400_BAD_REQUEST)
 
-class RefreshTokenView(APIView):
-    """Refresh JWT token"""
+
+class CustomTokenRefreshView(generics.GenericAPIView):
+    """Refresh JWT token endpoint"""
     permission_classes = [AllowAny]
 
-    def post(self, request):
-        refresh = request.data.get('refresh')
+    def post(self, request, *args, **kwargs):
+        refresh_token = request.data.get('refresh')
+        
+        print(f"Debug - Received refresh token: {refresh_token[:50] if refresh_token else 'None'}...")
 
-        if not refresh:
+        if not refresh_token:
             return Response({
                 'success': False,
                 'error': 'Refresh token required'
             }, status=status.HTTP_400_BAD_REQUEST)
         
         try:
-            # FIXED: Use RefreshToken class, not the view
-            token = RefreshToken(refresh)
+            # Create a RefreshToken object from the token string
+            refresh = RefreshToken(refresh_token)
+            
+            # Get the new access token
+            access_token = str(refresh.access_token)
+            
             return Response({
                 'success': True,
-                'access': str(token.access_token)
-            })
+                'access': access_token
+            }, status=status.HTTP_200_OK)
+            
         except Exception as e:
+            print(f"Debug - Refresh error: {str(e)}")
             return Response({
                 'success': False,
                 'error': f'Invalid refresh token: {str(e)}'
             }, status=status.HTTP_401_UNAUTHORIZED)
 
-class VerifyEmailView(APIView):
+
+class VerifyEmailView(generics.GenericAPIView):
+    """Email verification endpoint"""
     permission_classes = [AllowAny]
 
     def get(self, request):
@@ -117,8 +137,9 @@ class VerifyEmailView(APIView):
                 'error': 'Invalid or expired verification token'
             }, status=status.HTTP_400_BAD_REQUEST)
 
-class ResendVerificationView(APIView):
-    """Resend verification Email"""
+
+class ResendVerificationView(generics.GenericAPIView):
+    """Resend verification email endpoint"""
     permission_classes = [AllowAny]
 
     def post(self, request):
@@ -149,18 +170,21 @@ class ResendVerificationView(APIView):
                 'error': 'User not found or already verified'
             }, status=status.HTTP_404_NOT_FOUND)
 
-class PasswordResetRequestView(APIView):
+
+class PasswordResetRequestView(generics.GenericAPIView):
+    """Password reset request endpoint"""
     permission_classes = [AllowAny]
+    serializer_class = PasswordResetRequestSerializer
 
     def post(self, request):
-        serializer = PasswordResetRequestSerializer(data=request.data)
+        serializer = self.get_serializer(data=request.data)
 
         if serializer.is_valid():
             email = serializer.validated_data['email']
 
             try:
                 user = User.objects.get(email=email)
-                send_password_reset_email(user, request)
+                send_password_reset_email(user)
             except User.DoesNotExist:
                 # Don't reveal that user doesn't exist (security)
                 pass
@@ -175,11 +199,14 @@ class PasswordResetRequestView(APIView):
             'errors': serializer.errors
         }, status=status.HTTP_400_BAD_REQUEST)
 
-class PasswordResetConfirmView(APIView):
+
+class PasswordResetConfirmView(generics.GenericAPIView):
+    """Password reset confirmation endpoint"""
     permission_classes = [AllowAny]
+    serializer_class = PasswordResetConfirmSerializer
 
     def post(self, request):
-        serializer = PasswordResetConfirmSerializer(data=request.data)
+        serializer = self.get_serializer(data=request.data)
 
         if serializer.is_valid():
             token = serializer.validated_data['token']
@@ -206,63 +233,106 @@ class PasswordResetConfirmView(APIView):
                     'error': 'Invalid or expired reset token'
                 }, status=status.HTTP_400_BAD_REQUEST)
         
-        # FIXED: This return is now properly outside the if block
         return Response({
             'success': False,
             'errors': serializer.errors
         }, status=status.HTTP_400_BAD_REQUEST)
 
-# ==================== PROTECTED ENDPOINTS ====================
 
-class ProfileView(APIView):
-    """Get or update user profile"""
+# ==================== USER PROFILE VIEWSET ====================
+
+class UserProfileViewSet(mixins.RetrieveModelMixin,
+                         mixins.UpdateModelMixin,
+                         viewsets.GenericViewSet):
+    """ViewSet for user profile operations"""
     permission_classes = [IsAuthenticated]
+    serializer_class = UserProfileSerializer
 
-    def get(self, request):
-        serializer = UserSerializer(request.user)
+    def get_object(self):
+        return self.request.user
+
+    def get_serializer_class(self):
+        if self.action in ['update', 'partial_update']:
+            return UpdateUserProfileSerializer
+        return UserProfileSerializer
+
+    def retrieve(self, request, *args, **kwargs):
+        serializer = self.get_serializer(self.get_object())
         return Response({
             'success': True,
             'data': serializer.data
         })
 
-    def put(self, request):
-        serializer = UserSerializer(request.user, data=request.data, partial=False)
+    def update(self, request, *args, **kwargs):
+        partial = kwargs.pop('partial', False)
+        instance = self.get_object()
+        serializer = self.get_serializer(instance, data=request.data, partial=partial)
         
         if serializer.is_valid():
             serializer.save()
-            return Response({
-                'success': True,
-                'message': 'Profile updated successfully',
-                'data': serializer.data
-            })
+            profile_data = UserProfileSerializer(instance).data
+            return Response({'success': True, 'data': profile_data})
         
         return Response({
             'success': False,
             'errors': serializer.errors
         }, status=status.HTTP_400_BAD_REQUEST)
 
-    def patch(self, request):
-        serializer = UserSerializer(request.user, data=request.data, partial=True)
+
+# ==================== TERMS ACCEPTANCE VIEWS ====================
+
+class CheckTermsAcceptanceView(generics.GenericAPIView):
+    """Check if user has accepted latest terms"""
+    permission_classes = [IsAuthenticated]
+    
+    def get(self, request):
+        user = request.user
+        current_terms_version = '1.0'
+        current_privacy_version = '1.0'
         
-        if serializer.is_valid():
-            serializer.save()
-            return Response({
-                'success': True,
-                'message': 'Profile updated successfully',
-                'data': serializer.data
-            })
+        needs_terms_update = user.terms_version != current_terms_version
+        needs_privacy_update = user.privacy_version != current_privacy_version
         
         return Response({
-            'success': False,
-            'errors': serializer.errors
-        }, status=status.HTTP_400_BAD_REQUEST)
+            'needs_terms_update': needs_terms_update,
+            'needs_privacy_update': needs_privacy_update,
+            'current_terms_version': current_terms_version,
+            'current_privacy_version': current_privacy_version,
+            'user_terms_version': user.terms_version,
+            'user_privacy_version': user.privacy_version
+        })
 
-class ChangePasswordView(APIView):
+
+class AcceptTermsView(generics.GenericAPIView):
+    """Accept latest terms"""
+    permission_classes = [IsAuthenticated]
+    
+    def post(self, request):
+        user = request.user
+        terms_version = request.data.get('terms_version', '1.0')
+        privacy_version = request.data.get('privacy_version', '1.0')
+        
+        user.terms_version = terms_version
+        user.privacy_version = privacy_version
+        user.terms_accepted_at = timezone.now()
+        user.privacy_accepted_at = timezone.now()
+        user.save()
+        
+        return Response({
+            'success': True,
+            'message': 'Terms accepted successfully'
+        })
+
+
+# ==================== PASSWORD MANAGEMENT ====================
+
+class ChangePasswordView(generics.GenericAPIView):
     """Change user password"""
     permission_classes = [IsAuthenticated]
+    serializer_class = ChangePasswordSerializer
 
     def post(self, request):
-        serializer = ChangePasswordSerializer(data=request.data)
+        serializer = self.get_serializer(data=request.data)
         
         if serializer.is_valid():
             user = request.user
@@ -286,7 +356,10 @@ class ChangePasswordView(APIView):
             'errors': serializer.errors
         }, status=status.HTTP_400_BAD_REQUEST)
 
-class LogoutView(APIView):
+
+# ==================== ACCOUNT MANAGEMENT ====================
+
+class LogoutView(generics.GenericAPIView):
     """Logout user (blacklist refresh token)"""
     permission_classes = [IsAuthenticated]
 
@@ -296,8 +369,6 @@ class LogoutView(APIView):
             if refresh_token:
                 token = RefreshToken(refresh_token)
                 token.blacklist()
-            
-            
             
             return Response({
                 'success': True,
@@ -309,15 +380,17 @@ class LogoutView(APIView):
                 'error': f'Invalid token: {str(e)}'
             }, status=status.HTTP_400_BAD_REQUEST)
 
-class DeleteAccountView(APIView):
+
+class DeleteAccountView(generics.DestroyAPIView):
     """Delete user account"""
     permission_classes = [IsAuthenticated]
 
-    def delete(self, request):
-        # This will work with both JSON and form data
+    def get_object(self):
+        return self.request.user
+
+    def destroy(self, request, *args, **kwargs):
         password = request.data.get('password')
         
-        # If DRF didn't parse it, try manual parsing
         if not password and request.body:
             try:
                 import json
@@ -332,7 +405,7 @@ class DeleteAccountView(APIView):
                 'error': 'Password required'
             }, status=status.HTTP_400_BAD_REQUEST)
         
-        user = request.user
+        user = self.get_object()
         
         if not user.check_password(password):
             return Response({
@@ -340,9 +413,12 @@ class DeleteAccountView(APIView):
                 'error': 'Invalid password'
             }, status=status.HTTP_400_BAD_REQUEST)
         
-        user.delete()
+        self.perform_destroy(user)
         
         return Response({
             'success': True,
             'message': 'Account deleted successfully'
         })
+
+    def perform_destroy(self, instance):
+        instance.delete()
