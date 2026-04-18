@@ -78,12 +78,28 @@ class DashboardView(APIView):
         # Recent transactions (last 10)
         recent = Transaction.objects.filter(user=user).order_by('-date')[:10]
         
+        # Income breakdown by category
+        incomes = transactions.filter(transaction_type__contains='income')
+        income_dict = {}
+        for inc in incomes:
+            cat = inc.category
+            income_dict[cat] = income_dict.get(cat, 0) + float(inc.amount)
+        
+        income_breakdown = [
+            {
+                'category': k,
+                'amount': v,
+                'percentage': round((v / total_income * 100), 1) if total_income > 0 else 0
+            }
+            for k, v in sorted(income_dict.items(), key=lambda x: x[1], reverse=True)
+        ]
+        
         # Expense breakdown by category
         expenses = transactions.filter(transaction_type__contains='expense')
         expense_dict = {}
         for exp in expenses:
             cat = exp.category
-            expense_dict[cat] = expense_dict.get(cat, 0) + exp.amount
+            expense_dict[cat] = expense_dict.get(cat, 0) + float(exp.amount)
         
         expense_breakdown = [
             {
@@ -117,6 +133,37 @@ class DashboardView(APIView):
                 'profit': month_income - month_expense,
             })
         
+        # NEW: Comparison between Crops and Livestock
+        crop_income = Transaction.objects.filter(
+            user=user,
+            transaction_type='crop_income'
+        ).aggregate(total=Sum('amount')).get('total') or 0
+        
+        crop_expense = Transaction.objects.filter(
+            user=user,
+            transaction_type='crop_expense'
+        ).aggregate(total=Sum('amount')).get('total') or 0
+        
+        livestock_income = Transaction.objects.filter(
+            user=user,
+            transaction_type='animal_income'
+        ).aggregate(total=Sum('amount')).get('total') or 0
+        
+        livestock_expense = Transaction.objects.filter(
+            user=user,
+            transaction_type='animal_expense'
+        ).aggregate(total=Sum('amount')).get('total') or 0
+        
+        general_income = Transaction.objects.filter(
+            user=user,
+            transaction_type__contains='income'
+        ).exclude(transaction_type__in=['crop_income', 'animal_income']).aggregate(total=Sum('amount')).get('total') or 0
+        
+        general_expense = Transaction.objects.filter(
+            user=user,
+            transaction_type__contains='expense'
+        ).exclude(transaction_type__in=['crop_expense', 'animal_expense']).aggregate(total=Sum('amount')).get('total') or 0
+        
         data = {
             'period': period_name,
             'total_income': total_income,
@@ -126,8 +173,16 @@ class DashboardView(APIView):
             'expense_trend': round(expense_trend, 1),
             'balance_trend': round(income_trend - expense_trend, 1),
             'recent_transactions': TransactionSerializer(recent, many=True).data,
+            'income_breakdown': income_breakdown,
             'expense_breakdown': expense_breakdown,
             'monthly_trend': monthly_data,
+            # New comparison data
+            'crop_income': crop_income,
+            'crop_expense': crop_expense,
+            'livestock_income': livestock_income,
+            'livestock_expense': livestock_expense,
+            'general_income': general_income,
+            'general_expense': general_expense,
         }
         
         return Response(data)
