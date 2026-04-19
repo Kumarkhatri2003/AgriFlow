@@ -4,6 +4,7 @@ from rest_framework.views import APIView
 from django.db.models import Sum, Q
 from datetime import date, timedelta
 from collections import defaultdict
+from decimal import Decimal
 from .models import Transaction, FinancialSummary, Category, Budget
 from .serializers import (
     TransactionSerializer, TransactionCreateSerializer, DashboardSerializer,
@@ -54,22 +55,19 @@ class DashboardView(APIView):
                 date__year=year - 1
             )
         
-        # ------------------- FIX: Use .get() to avoid KeyError -------------------
-        total_income = transactions.filter(transaction_type__contains='income').aggregate(
-            total=Sum('amount')).get('total') or 0
+        # Convert Decimal to float for all totals
+        total_income = float(transactions.filter(transaction_type__contains='income').aggregate(
+            total=Sum('amount')).get('total') or 0)
         
-        total_expense = transactions.filter(transaction_type__contains='expense').aggregate(
-            total=Sum('amount')).get('total') or 0
-        # ------------------- END FIX -------------------
+        total_expense = float(transactions.filter(transaction_type__contains='expense').aggregate(
+            total=Sum('amount')).get('total') or 0)
         
         net_balance = total_income - total_expense
         
-        # ------------------- FIX: Use .get() to avoid KeyError -------------------
-        prev_income = prev_trans.filter(transaction_type__contains='income').aggregate(
-            total=Sum('amount')).get('total') or 0
-        prev_expense = prev_trans.filter(transaction_type__contains='expense').aggregate(
-            total=Sum('amount')).get('total') or 0
-        # ------------------- END FIX -------------------
+        prev_income = float(prev_trans.filter(transaction_type__contains='income').aggregate(
+            total=Sum('amount')).get('total') or 0)
+        prev_expense = float(prev_trans.filter(transaction_type__contains='expense').aggregate(
+            total=Sum('amount')).get('total') or 0)
         
         # Calculate trends
         income_trend = ((total_income - prev_income) / prev_income * 100) if prev_income > 0 else 0
@@ -83,7 +81,8 @@ class DashboardView(APIView):
         income_dict = {}
         for inc in incomes:
             cat = inc.category
-            income_dict[cat] = income_dict.get(cat, 0) + float(inc.amount)
+            amount = float(inc.amount)
+            income_dict[cat] = income_dict.get(cat, 0) + amount
         
         income_breakdown = [
             {
@@ -99,7 +98,8 @@ class DashboardView(APIView):
         expense_dict = {}
         for exp in expenses:
             cat = exp.category
-            expense_dict[cat] = expense_dict.get(cat, 0) + float(exp.amount)
+            amount = float(exp.amount)
+            expense_dict[cat] = expense_dict.get(cat, 0) + amount
         
         expense_breakdown = [
             {
@@ -118,12 +118,10 @@ class DashboardView(APIView):
                 date__year=year,
                 date__month=m
             )
-            # ------------------- FIX: Use .get() to avoid KeyError -------------------
-            month_income = month_trans.filter(transaction_type__contains='income').aggregate(
-                total=Sum('amount')).get('total') or 0
-            month_expense = month_trans.filter(transaction_type__contains='expense').aggregate(
-                total=Sum('amount')).get('total') or 0
-            # ------------------- END FIX -------------------
+            month_income = float(month_trans.filter(transaction_type__contains='income').aggregate(
+                total=Sum('amount')).get('total') or 0)
+            month_expense = float(month_trans.filter(transaction_type__contains='expense').aggregate(
+                total=Sum('amount')).get('total') or 0)
             
             monthly_data.append({
                 'month': m,
@@ -133,36 +131,36 @@ class DashboardView(APIView):
                 'profit': month_income - month_expense,
             })
         
-        # NEW: Comparison between Crops and Livestock
-        crop_income = Transaction.objects.filter(
+        # Comparison between Crops and Livestock
+        crop_income = float(Transaction.objects.filter(
             user=user,
             transaction_type='crop_income'
-        ).aggregate(total=Sum('amount')).get('total') or 0
+        ).aggregate(total=Sum('amount')).get('total') or 0)
         
-        crop_expense = Transaction.objects.filter(
+        crop_expense = float(Transaction.objects.filter(
             user=user,
             transaction_type='crop_expense'
-        ).aggregate(total=Sum('amount')).get('total') or 0
+        ).aggregate(total=Sum('amount')).get('total') or 0)
         
-        livestock_income = Transaction.objects.filter(
+        livestock_income = float(Transaction.objects.filter(
             user=user,
             transaction_type='animal_income'
-        ).aggregate(total=Sum('amount')).get('total') or 0
+        ).aggregate(total=Sum('amount')).get('total') or 0)
         
-        livestock_expense = Transaction.objects.filter(
+        livestock_expense = float(Transaction.objects.filter(
             user=user,
             transaction_type='animal_expense'
-        ).aggregate(total=Sum('amount')).get('total') or 0
+        ).aggregate(total=Sum('amount')).get('total') or 0)
         
-        general_income = Transaction.objects.filter(
+        general_income = float(Transaction.objects.filter(
             user=user,
             transaction_type__contains='income'
-        ).exclude(transaction_type__in=['crop_income', 'animal_income']).aggregate(total=Sum('amount')).get('total') or 0
+        ).exclude(transaction_type__in=['crop_income', 'animal_income']).aggregate(total=Sum('amount')).get('total') or 0)
         
-        general_expense = Transaction.objects.filter(
+        general_expense = float(Transaction.objects.filter(
             user=user,
             transaction_type__contains='expense'
-        ).exclude(transaction_type__in=['crop_expense', 'animal_expense']).aggregate(total=Sum('amount')).get('total') or 0
+        ).exclude(transaction_type__in=['crop_expense', 'animal_expense']).aggregate(total=Sum('amount')).get('total') or 0)
         
         data = {
             'period': period_name,
@@ -176,7 +174,6 @@ class DashboardView(APIView):
             'income_breakdown': income_breakdown,
             'expense_breakdown': expense_breakdown,
             'monthly_trend': monthly_data,
-            # New comparison data
             'crop_income': crop_income,
             'crop_expense': crop_expense,
             'livestock_income': livestock_income,
@@ -205,7 +202,7 @@ class TransactionListView(generics.ListCreateAPIView):
         month = self.request.query_params.get('month')
         start_date = self.request.query_params.get('start_date')
         end_date = self.request.query_params.get('end_date')
-        t_type = self.request.query_params.get('type')  # 'income' or 'expense'
+        t_type = self.request.query_params.get('type')
         category = self.request.query_params.get('category')
         search = self.request.query_params.get('search')
         
@@ -247,9 +244,6 @@ class TransactionDetailView(generics.RetrieveUpdateDestroyAPIView):
     
     def get_queryset(self):
         return Transaction.objects.filter(user=self.request.user)
-    
-    def perform_update(self, serializer):
-        serializer.save()
 
 
 class CategoryListView(generics.ListCreateAPIView):
@@ -294,7 +288,6 @@ class BudgetDetailView(generics.RetrieveUpdateDestroyAPIView):
         return Budget.objects.filter(user=self.request.user)
     
     def perform_update(self, serializer):
-        # Update actual figures before saving
         budget = self.get_object()
         year = budget.year
         month = budget.month
@@ -306,12 +299,10 @@ class BudgetDetailView(generics.RetrieveUpdateDestroyAPIView):
         if month:
             transactions = transactions.filter(date__month=month)
         
-        # ------------------- FIX: Use .get() to avoid KeyError -------------------
-        actual_income = transactions.filter(transaction_type__contains='income').aggregate(
-            total=Sum('amount')).get('total') or 0
-        actual_expense = transactions.filter(transaction_type__contains='expense').aggregate(
-            total=Sum('amount')).get('total') or 0
-        # ------------------- END FIX -------------------
+        actual_income = float(transactions.filter(transaction_type__contains='income').aggregate(
+            total=Sum('amount')).get('total') or 0)
+        actual_expense = float(transactions.filter(transaction_type__contains='expense').aggregate(
+            total=Sum('amount')).get('total') or 0)
         
         serializer.save(
             actual_income=actual_income,
@@ -332,7 +323,6 @@ class ReportExportView(APIView):
         if start_date and end_date:
             transactions = transactions.filter(date__range=[start_date, end_date])
         
-        # Create CSV response
         import csv
         from django.http import HttpResponse
         
