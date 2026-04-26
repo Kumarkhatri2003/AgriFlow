@@ -235,11 +235,11 @@ class CropIncome(models.Model):
     crop = models.ForeignKey(Crop, on_delete=models.CASCADE, related_name='incomes')
 
     INCOME_SOURCES = [
-        ('crop_sale', 'Crop Sale (बाली बिक्री)'),
-        ('subsidy', 'Government Subsidy (अनुदान)'),
-        ('insurance', 'Crop Insurance (बीमा)'),
-        ('seed_sale', 'Seed Sale (बीउ बिक्री)'),
-        ('other', 'Other Income (अन्य)'),
+        ('crop_sale', 'Crop Sale'),
+        ('subsidy', 'Government Subsidy'),
+        ('insurance', 'Crop Insurance'),
+        ('seed_sale', 'Seed Sale '),
+        ('other', 'Other Income'),
     ]
 
     source = models.CharField(max_length=50, choices=INCOME_SOURCES)
