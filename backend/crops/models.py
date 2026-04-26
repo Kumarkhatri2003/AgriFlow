@@ -198,13 +198,13 @@ class CropExpense(models.Model):
 
    
     EXPENSE_CATEGORIES = [
-        ('seed', 'Seeds (बीउ)'),
-        ('labor', 'Labor (ज्याला)'),
-        ('land_rent', 'Land Rent (भाडा)'),
-        ('irrigation', 'Irrigation (सिँचाइ)'),
-        ('equipment', 'Equipment (उपकरण)'),
-        ('transport', 'Transportation (ढुवानी)'),
-        ('other', 'Other (अन्य)'),
+        ('seed', 'Seeds'),
+        ('labor', 'Labor '),
+        ('land_rent', 'Land Rent'),
+        ('irrigation', 'Irrigation'),
+        ('equipment', 'Equipment'),
+        ('transport', 'Transportation'),
+        ('other', 'Other'),
     ]
 
     category = models.CharField(max_length=50, choices=EXPENSE_CATEGORIES)
@@ -238,7 +238,7 @@ class CropIncome(models.Model):
         ('crop_sale', 'Crop Sale'),
         ('subsidy', 'Government Subsidy'),
         ('insurance', 'Crop Insurance'),
-        ('seed_sale', 'Seed Sale '),
+        ('seed_sale', 'Seed Sale'),
         ('other', 'Other Income'),
     ]
 
