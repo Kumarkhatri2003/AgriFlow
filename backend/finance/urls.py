@@ -19,4 +19,7 @@ urlpatterns = [
     
     # Export
     path('export/', views.ReportExportView.as_view(), name='export-transactions'),
+    
+    path('transactions/by-source/<str:source_model>/', views.TransactionListView.as_view(), name='transaction-by-source'),
+
 ]

@@ -198,6 +198,8 @@ class TransactionListView(generics.ListCreateAPIView):
         queryset = Transaction.objects.filter(user=self.request.user)
         
         # Filter parameters
+        source_model = self.request.query_params.get('source_model')  # fertilizer, pesticide, etc.
+
         year = self.request.query_params.get('year')
         month = self.request.query_params.get('month')
         start_date = self.request.query_params.get('start_date')
@@ -223,6 +225,10 @@ class TransactionListView(generics.ListCreateAPIView):
         # Category filter
         if category:
             queryset = queryset.filter(category__icontains=category)
+            
+        #source filter
+        if source_model:
+            queryset = queryset.filter(source_model=source_model)
         
         # Search
         if search:

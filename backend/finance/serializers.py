@@ -10,6 +10,9 @@ class TransactionSerializer(serializers.ModelSerializer):
     formatted_amount = serializers.CharField(read_only=True)
     
     crop_name = serializers.CharField(source='crop.name', read_only=True, default=None)
+    crop_field_name = serializers.CharField(source='crop.field_name', read_only=True, default=None)
+        
+        
     animal_name = serializers.CharField(source='animal.name', read_only=True, default=None)
     animal_tag = serializers.CharField(source='animal.tag_number', read_only=True, default=None)
     
@@ -18,7 +21,7 @@ class TransactionSerializer(serializers.ModelSerializer):
         fields = [
             'id', 'transaction_type', 'transaction_type_display',
             'date', 'amount', 'formatted_amount', 'description', 'category',
-            'is_income', 'crop', 'crop_name', 'animal', 'animal_name', 'animal_tag',
+            'is_income', 'crop', 'crop_name','crop_field_name', 'animal', 'animal_name', 'animal_tag',
             'notes', 'created_at'
         ]
         read_only_fields = ['id', 'created_at']
