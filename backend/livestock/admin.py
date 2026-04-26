@@ -1,5 +1,4 @@
-from traceback import format_tb
-
+from django.utils.html import format_html
 from django.contrib import admin
 from .models import (
     AnimalType, Animal, VaccinationRecord, HealthRecord, 
@@ -80,7 +79,7 @@ class AnimalExpenseInline(admin.TabularInline):
 class AnimalAdmin(admin.ModelAdmin):
     list_display = [
         'tag_number', 'name', 'animal_type', 'farmer', 'gender', 'status', 
-        'is_pregnant', 'display_total_income', 'display_total_expense', 'display_net_profit'
+        'is_pregnant','acquisition_cost','display_total_income', 'display_total_expense', 'display_net_profit'
     ]
     list_filter = ['animal_type', 'gender', 'status', 'is_pregnant']
     search_fields = ['tag_number', 'name', 'farmer__email', 'farmer__username']
@@ -135,11 +134,14 @@ class AnimalAdmin(admin.ModelAdmin):
     display_total_expense.short_description = "Total Expense"
     
     def display_net_profit(self, obj):
-        profit = obj.net_profit
+        profit = float(obj.net_profit)
         color = 'green' if profit >= 0 else 'red'
-        return format_tb(
-            '<span style="color: {}; font-weight: bold;">NPR {:,.2f}</span>',
-            color, profit
+        formatted_profit = f"NPR {profit:,.2f}"
+
+        return format_html(
+            '<span style="color: {}; font-weight: bold;">{}</span>',
+        color, formatted_profit
+            
         )
     display_net_profit.short_description = "Net Profit"
 

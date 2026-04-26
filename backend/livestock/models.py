@@ -73,7 +73,6 @@ class Animal(models.Model):
     
     class Meta:
         ordering = ['-created_at']
-        # This ensures one farmer cannot have duplicate tags
         unique_together = ['farmer', 'tag_number']
     
     def __str__(self):
@@ -173,8 +172,6 @@ class Animal(models.Model):
             return (self.net_profit / self.total_income) * 100
         return 0
     
-    class Meta:
-        ordering = ['-created_at']
     
     def __str__(self):
         if self.name:
