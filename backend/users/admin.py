@@ -6,6 +6,8 @@ from .models import User
 @admin.register(User)
 class UserAdmin(BaseUserAdmin):
 
+    readonly_fields = ('created_at', 'updated_at')
+
     # Fields shown in the user list page
     list_display = (
         'email',
@@ -60,7 +62,6 @@ class UserAdmin(BaseUserAdmin):
         }),
     )
 
-    # Fields shown while creating a new user in admin
     add_fieldsets = (
         (None, {
             'classes': ('wide',),
