@@ -63,7 +63,6 @@ class UserAdmin(BaseUserAdmin):
         }),
     )
 
-    # Fields shown while creating a new user in admin
     add_fieldsets = (
         (None, {
             'classes': ('wide',),
