@@ -6,6 +6,7 @@ from .models import User
 @admin.register(User)
 class UserAdmin(BaseUserAdmin):
 
+    # Add this line to make timestamp fields read-only
     readonly_fields = ('created_at', 'updated_at')
 
     # Fields shown in the user list page
