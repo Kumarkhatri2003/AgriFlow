@@ -46,8 +46,21 @@ INSTALLED_APPS = [
     'crops',
     'livestock',
     'finance',
+    'weather',
     
 ]
+
+WEATHER_API_KEY = '2294c5bb5e5b4fb087432543262604'
+
+
+CACHES ={
+    'default':{
+        'BACKEND': 'django.core.cache.backends.locmem.LocMemCache',
+        'LOCATION': 'weather-cache',
+    }
+}
+
+WEATHER_CACHE_TIMEOUT = 1800
 
 MIDDLEWARE = [
     "corsheaders.middleware.CorsMiddleware",
@@ -209,5 +222,5 @@ CORS_ALLOW_CREDENTIALS = True
 EMAIL_BACKEND = 'django.core.mail.backends.console.EmailBackend'
 DEFAULT_FROM_EMAIL = 'AgriFlow <noreply@agriflow.com>'
 
-# Frontend URL for email links
 FRONTEND_URL = os.environ.get('FRONTEND_URL', 'http://localhost:3000')
+
