@@ -1,6 +1,5 @@
 from pathlib import Path
 from datetime import timedelta
-from pathlib import Path
 from dotenv import load_dotenv
 import os
 
@@ -47,6 +46,7 @@ INSTALLED_APPS = [
     'livestock',
     'finance',
     'weather',
+    'admin_panel',
     
 ]
 
