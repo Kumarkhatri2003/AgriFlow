@@ -170,13 +170,14 @@ class Budget(models.Model):
     @property
     def progress_income(self):
         if self.planned_income > 0:
-            return (self.actual_income / self.planned_income) * 100
-        return 0
+             return float(self.actual_income) / float(self.planned_income) * 100
+        return 0.0
     
     @property
     def progress_expense(self):
         if self.planned_expense > 0:
-            return (self.actual_expense / self.planned_expense) * 100
+            return float(self.actual_expense) / float(self.planned_expense) * 100
+            
         return 0
     
     @property
