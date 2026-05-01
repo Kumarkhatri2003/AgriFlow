@@ -415,3 +415,49 @@ class RecentActivitySerializer(serializers.Serializer):
     timestamp = serializers.DateTimeField()
     user_name = serializers.CharField()
     user_email = serializers.CharField()
+    
+    
+class AdminUserListSerializer(serializers.ModelSerializer):
+    """List admin users"""
+    full_name = serializers.SerializerMethodField()
+    
+    class Meta:
+        model = User
+        fields = ['id', 'username', 'email', 'full_name', 'phone', 'date_joined', 'last_login']
+    
+    def get_full_name(self, obj):
+        return obj.get_full_name()
+
+
+class AdminUserCreateSerializer(serializers.ModelSerializer):
+    """Create admin user"""
+    password = serializers.CharField(write_only=True, required=True)
+    
+    class Meta:
+        model = User
+        fields = ['username', 'email', 'password', 'first_name', 'last_name', 'phone']
+    
+    def create(self, validated_data):
+        password = validated_data.pop('password')
+        user = User.objects.create_user(
+            **validated_data,
+            password=password,
+            is_farmer=False,
+            is_admin=True,
+            is_email_verified=True
+        )
+        return user
+
+
+class FarmerListSerializer(serializers.ModelSerializer):
+    """List farmers (non-admin users)"""
+    full_name = serializers.SerializerMethodField()
+    
+    class Meta:
+        model = User
+        fields = ['id', 'username', 'email', 'full_name', 'phone', 
+                  'farm_name', 'geographical_region', 'is_active', 
+                  'is_email_verified', 'date_joined']
+    
+    def get_full_name(self, obj):
+        return obj.get_full_name()
