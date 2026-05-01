@@ -342,16 +342,84 @@ class RecentActivitiesView(APIView):
         return Response(activities[:10])
 
 
+class AdminUserManagementView(APIView):
+    """Manage admin users separately"""
+    permission_classes = [IsAdminUser]
+    
+    def get(self, request):
+        """List all admin users"""
+        admins = User.objects.filter(is_admin=True).order_by('-date_joined')
+        
+        serializer = AdminUserListSerializer(admins, many=True)
+        return Response({
+            'admins': serializer.data,
+            'count': admins.count()
+        })
+    
+    def post(self, request):
+        """Create a new admin user"""
+        serializer = AdminUserCreateSerializer(data=request.data)
+        if serializer.is_valid():
+            user = serializer.save()
+            
+            AdminLog.objects.create(
+                admin_user=request.user,
+                action='CREATE',
+                model_name='Admin',
+                object_id=str(user.id),
+                object_repr=user.get_full_name(),
+                ip_address=request.META.get('REMOTE_ADDR')
+            )
+            
+            return Response(AdminUserListSerializer(user).data, 
+                          status=status.HTTP_201_CREATED)
+        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+    
+    def delete(self, request, admin_id):
+        """Remove admin (demote to regular user)"""
+        try:
+            admin_user = User.objects.get(id=admin_id, is_admin=True)
+        except User.DoesNotExist:
+            return Response({'error': 'Admin user not found'}, 
+                          status=status.HTTP_404_NOT_FOUND)
+        
+        # Prevent deleting the last admin
+        if User.objects.filter(is_admin=True).count() <= 1:
+            return Response({'error': 'Cannot remove the last admin user'}, 
+                          status=status.HTTP_400_BAD_REQUEST)
+        
+        if admin_user.id == request.user.id:
+            return Response({'error': 'You cannot remove your own admin account'}, 
+                          status=status.HTTP_400_BAD_REQUEST)
+        
+        # Demote to regular user (not farmer)
+        admin_user.is_admin = False
+        admin_user.is_farmer = False
+        admin_user.save()
+        
+        AdminLog.objects.create(
+            admin_user=request.user,
+            action='DELETE',
+            model_name='Admin',
+            object_id=str(admin_user.id),
+            object_repr=admin_user.get_full_name(),
+            changes={'demoted_to_user': True},
+            ip_address=request.META.get('REMOTE_ADDR')
+        )
+        
+        return Response({'message': f'{admin_user.get_full_name()} demoted to regular user'})
+
 # ============================================================
 # FARMER MANAGEMENT VIEWS
 # ============================================================
 
 class FarmerManagementView(APIView):
-    """Complete farmer management"""
+    """Complete farmer management - ONLY farmers (excludes admins)"""
     permission_classes = [IsAdminUser]
     
     def get(self, request):
-        farmers = User.objects.filter(is_farmer=True).order_by('-date_joined')
+        # IMPORTANT: Only get users who are farmers AND NOT admins
+        farmers = User.objects.filter(is_farmer=True, is_admin=False).order_by('-date_joined')
         
         # Search
         search = request.query_params.get('search')
@@ -398,21 +466,44 @@ class FarmerManagementView(APIView):
             }
         })
     
-    def get_detail(self, request, farmer_id):
-        try:
-            farmer = User.objects.get(id=farmer_id, is_farmer=True)
-        except User.DoesNotExist:
-            return Response({'error': 'Farmer not found'}, status=status.HTTP_404_NOT_FOUND)
-        
-        serializer = FarmerDetailSerializer(farmer)
-        return Response(serializer.data)
-    
     def put(self, request, farmer_id):
+        """Update farmer - can also promote to admin"""
         try:
-            farmer = User.objects.get(id=farmer_id, is_farmer=True)
+            farmer = User.objects.get(id=farmer_id, is_farmer=True, is_admin=False)
         except User.DoesNotExist:
             return Response({'error': 'Farmer not found'}, status=status.HTTP_404_NOT_FOUND)
         
+        # Check if promoting to admin
+        if request.data.get('promote_to_admin'):
+            if farmer.id == request.user.id:
+                return Response({'error': 'You cannot promote yourself'}, 
+                              status=status.HTTP_400_BAD_REQUEST)
+            
+            farmer.is_admin = True
+            farmer.is_farmer = False
+            farmer.save()
+            
+            AdminLog.objects.create(
+                admin_user=request.user,
+                action='UPDATE',
+                model_name='Farmer',
+                object_id=str(farmer.id),
+                object_repr=farmer.get_full_name(),
+                changes={'promoted_to_admin': True},
+                ip_address=request.META.get('REMOTE_ADDR')
+            )
+            
+            return Response({
+                'message': f'{farmer.get_full_name()} promoted to Admin',
+                'user': {
+                    'id': farmer.id,
+                    'username': farmer.username,
+                    'full_name': farmer.get_full_name(),
+                    'is_admin': farmer.is_admin
+                }
+            })
+        
+        # Regular farmer update
         serializer = FarmerUpdateSerializer(farmer, data=request.data, partial=True)
         if serializer.is_valid():
             changes = serializer.validated_data
@@ -433,7 +524,7 @@ class FarmerManagementView(APIView):
     
     def delete(self, request, farmer_id):
         try:
-            farmer = User.objects.get(id=farmer_id, is_farmer=True)
+            farmer = User.objects.get(id=farmer_id, is_farmer=True, is_admin=False)
         except User.DoesNotExist:
             return Response({'error': 'Farmer not found'}, status=status.HTTP_404_NOT_FOUND)
         

@@ -8,6 +8,11 @@ urlpatterns = [
     path('auth/change-password/', views.AdminChangePasswordView.as_view(), name='admin-change-password'),
     path('auth/logout/', views.AdminLogoutView.as_view(), name='admin-logout'),
     
+    # Admin User Management
+    path('admins/', views.AdminUserManagementView.as_view(), name='admin-users'),
+    path('admins/create/', views.AdminUserManagementView.as_view(), name='admin-user-create'),
+    path('admins/<int:admin_id>/', views.AdminUserManagementView.as_view(), name='admin-user-delete'),
+    
     # Dashboard
     path('dashboard/stats/', views.DashboardStatsView.as_view(), name='dashboard-stats'),
     path('dashboard/farmer-trend/', views.FarmerRegistrationTrendView.as_view(), name='farmer-trend'),

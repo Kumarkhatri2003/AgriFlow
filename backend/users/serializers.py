@@ -512,7 +512,20 @@ class LoginSerializer(serializers.Serializer):
                 refresh = RefreshToken.for_user(user)
                 
                 return {
-                    'user': UserSerializer(user).data,
+                    'user': {
+                        'id': user.id,
+                        'username': user.username,
+                        'email': user.email,
+                        'full_name': user.get_full_name(),
+                        'first_name': user.first_name,
+                        'last_name': user.last_name,
+                        'phone': user.phone,
+                        'is_farmer': user.is_farmer,
+                        'is_admin': user.is_admin,  
+                        'is_email_verified': user.is_email_verified,
+                        'location': user.location,
+                        
+                    },
                     'access': str(refresh.access_token),
                     'refresh': str(refresh)
                 }
@@ -591,3 +604,64 @@ class PasswordResetConfirmSerializer(serializers.Serializer):
                 "new_password": "Password fields didn't match."
             })
         return attrs
+    
+    
+class RoleUpdateSerializer(serializers.Serializer):
+    """Serializer for updating user roles (admin only)"""
+    
+    is_farmer = serializers.BooleanField(required=False)
+    is_admin = serializers.BooleanField(required=False)
+    
+    def validate(self, attrs):
+        """Ensure user cannot be both farmer and admin"""
+        is_farmer = attrs.get('is_farmer', False)
+        is_admin = attrs.get('is_admin', False)
+        
+        if is_farmer and is_admin:
+            raise serializers.ValidationError(
+                "A user cannot be both a farmer and an admin. Please choose one role."
+            )
+        
+        return attrs
+    
+class AdminUserCreateSerializer(serializers.ModelSerializer):
+    """Serializer for creating admin users (admin only)"""
+    password = serializers.CharField(write_only=True, validators=[validate_password])
+    
+    class Meta:
+        model = User
+        fields = ('username', 'email', 'password', 'first_name', 'last_name', 'phone')
+    
+    def create(self, validated_data):
+        password = validated_data.pop('password')
+        user = User.objects.create_user(
+            **validated_data,
+            password=password,
+            is_farmer=False,
+            is_admin=True,
+            is_email_verified=True
+        )
+        return user
+
+
+class UserListAdminSerializer(serializers.ModelSerializer):
+    """Serializer for listing users in admin panel"""
+    full_name = serializers.SerializerMethodField()
+    user_type = serializers.SerializerMethodField()
+    
+    class Meta:
+        model = User
+        fields = ('id', 'username', 'email', 'full_name', 'phone', 'is_farmer', 
+                  'is_admin', 'user_type', 'is_active', 'is_email_verified', 'date_joined')
+    
+    def get_full_name(self, obj):
+        return obj.get_full_name()
+    
+    def get_user_type(self, obj):
+        if obj.is_admin:
+            return 'admin'
+        elif obj.is_farmer:
+            return 'farmer'
+        return 'user'
+    
+    

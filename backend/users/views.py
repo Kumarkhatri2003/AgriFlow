@@ -8,11 +8,15 @@ from rest_framework_simplejwt.views import TokenRefreshView
 from django.contrib.auth import logout as django_logout
 from django.utils import timezone
 from django.conf import settings
+
+from users.permissions import IsAdminUser
 from .utils import send_verification_email, send_password_reset_email
 from .serializers import (
     RegisterSerializer, UserSerializer, LoginSerializer, 
     PasswordResetRequestSerializer, PasswordResetConfirmSerializer, 
     ChangePasswordSerializer, UpdateUserProfileSerializer, UserProfileSerializer,
+     RoleUpdateSerializer, AdminUserCreateSerializer, UserListAdminSerializer
+
 )
 from .models import User
 import uuid
@@ -422,3 +426,183 @@ class DeleteAccountView(generics.DestroyAPIView):
 
     def perform_destroy(self, instance):
         instance.delete()
+        
+        
+class ListUsersView(generics.ListAPIView):
+    """List all users with role filtering (admin only)"""
+    permission_classes = [IsAuthenticated, IsAdminUser]
+    serializer_class = UserListAdminSerializer
+    
+    def get_queryset(self):
+        queryset = User.objects.all().order_by('-date_joined')
+        
+        role = self.request.query_params.get('role')
+        if role == 'admin':
+            queryset = queryset.filter(is_admin=True)
+        elif role == 'farmer':
+            queryset = queryset.filter(is_farmer=True, is_admin=False)
+        elif role == 'user':
+            queryset = queryset.filter(is_admin=False, is_farmer=False)
+        
+        return queryset
+    
+    def list(self, request, *args, **kwargs):
+        queryset = self.get_queryset()
+        serializer = self.get_serializer(queryset, many=True)
+        return Response({
+            'success': True,
+            'count': queryset.count(),
+            'users': serializer.data
+        })
+
+
+class AdminUserCreateView(generics.CreateAPIView):
+    """Create admin users (admin only)"""
+    permission_classes = [IsAuthenticated, IsAdminUser]
+    serializer_class = AdminUserCreateSerializer
+    
+    def create(self, request, *args, **kwargs):
+        serializer = self.get_serializer(data=request.data)
+        if serializer.is_valid():
+            user = serializer.save()
+            return Response({
+                'success': True,
+                'message': 'Admin user created successfully',
+                'user': UserSerializer(user).data
+            }, status=status.HTTP_201_CREATED)
+        return Response({
+            'success': False,
+            'errors': serializer.errors
+        }, status=status.HTTP_400_BAD_REQUEST)
+
+
+class UserRoleUpdateView(generics.GenericAPIView):
+    """Update user role (admin only)"""
+    permission_classes = [IsAuthenticated, IsAdminUser]
+    serializer_class = RoleUpdateSerializer
+    
+    def patch(self, request, user_id):
+        try:
+            user = User.objects.get(id=user_id)
+        except User.DoesNotExist:
+            return Response({
+                'success': False,
+                'error': 'User not found'
+            }, status=status.HTTP_404_NOT_FOUND)
+        
+        # Prevent self role change
+        if user.id == request.user.id:
+            return Response({
+                'success': False,
+                'error': 'You cannot change your own role'
+            }, status=status.HTTP_400_BAD_REQUEST)
+        
+        # Prevent removing the last admin
+        if user.is_admin and not request.data.get('is_admin', True):
+            admin_count = User.objects.filter(is_admin=True).count()
+            if admin_count <= 1:
+                return Response({
+                    'success': False,
+                    'error': 'Cannot remove the last admin user'
+                }, status=status.HTTP_400_BAD_REQUEST)
+        
+        serializer = self.get_serializer(data=request.data)
+        
+        if serializer.is_valid():
+            validated_data = serializer.validated_data
+            
+            # Ensure cannot be both
+            if validated_data.get('is_admin', False):
+                user.is_admin = True
+                user.is_farmer = False
+            elif validated_data.get('is_farmer', False):
+                user.is_farmer = True
+                user.is_admin = False
+            else:
+                user.is_farmer = False
+                user.is_admin = False
+            
+            user.save()
+            
+            # Log to admin_panel
+            try:
+                from admin_panel.models import AdminLog 
+                AdminLog.objects.create(
+                    admin_user=request.user,
+                    action='UPDATE',
+                    model_name='User',
+                    object_id=str(user.id),
+                    object_repr=user.get_full_name(),
+                    changes={'new_role': 'admin' if user.is_admin else 'farmer' if user.is_farmer else 'user'},
+                    ip_address=request.META.get('REMOTE_ADDR')
+                )
+            except ImportError:
+                pass
+            
+            return Response({
+                'success': True,
+                'message': 'User role updated successfully',
+                'user': {
+                    'id': user.id,
+                    'username': user.username,
+                    'email': user.email,
+                    'full_name': user.get_full_name(),
+                    'is_farmer': user.is_farmer,
+                    'is_admin': user.is_admin,
+                    'user_type': 'admin' if user.is_admin else 'farmer' if user.is_farmer else 'user'
+                }
+            })
+        
+        return Response({
+            'success': False,
+            'errors': serializer.errors
+        }, status=status.HTTP_400_BAD_REQUEST)
+
+
+class PromoteToAdminView(generics.GenericAPIView):
+    """Promote a farmer to admin (admin only)"""
+    permission_classes = [IsAuthenticated, IsAdminUser]
+    
+    def post(self, request, user_id):
+        try:
+            user = User.objects.get(id=user_id, is_farmer=True, is_admin=False)
+        except User.DoesNotExist:
+            return Response({'error': 'Farmer not found'}, status=status.HTTP_404_NOT_FOUND)
+        
+        if user.id == request.user.id:
+            return Response({'error': 'You are already an admin'}, status=status.HTTP_400_BAD_REQUEST)
+        
+        user.is_admin = True
+        user.is_farmer = False
+        user.save()
+        
+        return Response({
+            'success': True,
+            'message': f'{user.get_full_name()} has been promoted to Admin'
+        })
+
+
+class DemoteAdminView(generics.GenericAPIView):
+    """Demote an admin to regular user (admin only)"""
+    permission_classes = [IsAuthenticated, IsAdminUser]
+    
+    def post(self, request, user_id):
+        try:
+            user = User.objects.get(id=user_id, is_admin=True)
+        except User.DoesNotExist:
+            return Response({'error': 'Admin user not found'}, status=status.HTTP_404_NOT_FOUND)
+        
+        if user.id == request.user.id:
+            return Response({'error': 'You cannot demote yourself'}, status=status.HTTP_400_BAD_REQUEST)
+        
+        if User.objects.filter(is_admin=True).count() <= 1:
+            return Response({'error': 'Cannot demote the last admin user'}, status=status.HTTP_400_BAD_REQUEST)
+        
+        user.is_admin = False
+        user.is_farmer = False
+        user.save()
+        
+        return Response({
+            'success': True,
+            'message': f'{user.get_full_name()} has been demoted to regular user'
+        })

@@ -26,5 +26,11 @@ urlpatterns = [
     path('logout/', views.LogoutView.as_view(), name='logout'),
     path('delete-account/', views.DeleteAccountView.as_view(), name='delete_account'),
     
+    path('admin/users/', views.ListUsersView.as_view(), name='admin-list-users'),
+    path('admin/users/create/', views.AdminUserCreateView.as_view(), name='admin-create-user'),
+    path('admin/users/<int:user_id>/role/', views.UserRoleUpdateView.as_view(), name='admin-update-role'),
+    path('admin/users/<int:user_id>/promote/', views.PromoteToAdminView.as_view(), name='admin-promote-user'),
+    path('admin/users/<int:user_id>/demote/', views.DemoteAdminView.as_view(), name='admin-demote-user'),
+    
     path('', include(router.urls)),
 ]
