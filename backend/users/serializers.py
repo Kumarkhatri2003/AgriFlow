@@ -374,7 +374,7 @@ class RegisterSerializer(serializers.ModelSerializer):
         # Validate gender choice
         gender = attrs.get('gender')
         if gender:
-            valid_genders = ['M', 'F', 'O', '']  # Adjust based on your model choices
+            valid_genders = ['M', 'F', 'O', ''] 
             if gender not in valid_genders:
                 raise serializers.ValidationError({
                     "gender": "Invalid gender selection"
@@ -383,7 +383,7 @@ class RegisterSerializer(serializers.ModelSerializer):
         # Validate geographical region
         region = attrs.get('geographical_region')
         if region:
-            valid_regions = ['terai', 'hilly', 'mountain', 'kathmandu_valley']
+            valid_regions = ['terai', 'hilly', 'himalayan']
             if region.lower() not in valid_regions:
                 raise serializers.ValidationError({
                     "geographical_region": f"Invalid region. Choose from: {', '.join(valid_regions)}"
