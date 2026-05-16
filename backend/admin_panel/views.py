@@ -323,7 +323,7 @@ class RecentActivitiesView(APIView):
             })
         
         # Recent transactions
-        recent_transactions = Transaction.objects.order_by('-date')[:5]
+        recent_transactions = Transaction.objects.order_by('-created_at')[:5]
         for trans in recent_transactions:
             trans_type = 'Income' if 'income' in trans.transaction_type else 'Expense'
             activities.append({
@@ -331,7 +331,7 @@ class RecentActivitiesView(APIView):
                 'type': 'transaction',
                 'title': f'{trans_type} Recorded',
                 'description': f'Rs. {trans.amount:,.2f} - {trans.description}',
-                'timestamp': trans.date,
+                'timestamp': trans.created_at,
                 'user_name': trans.user.get_full_name(),
                 'user_email': trans.user.email
             })
