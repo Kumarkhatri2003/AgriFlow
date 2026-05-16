@@ -2,7 +2,7 @@ from rest_framework import serializers
 from django.contrib.auth import get_user_model
 from django.db.models import Sum, Count
 from django.utils import timezone
-from datetime import datetime, timedelta
+from datetime import date, datetime, timedelta
 from crops.models import Crop, CropKnowledgeBase
 from livestock.models import Animal, AnimalType
 from finance.models import Transaction
@@ -273,6 +273,8 @@ class LivestockListAdminSerializer(serializers.ModelSerializer):
     farmer_name = serializers.CharField(source='farmer.get_full_name', read_only=True)
     animal_type_name = serializers.CharField(source='animal_type.name', read_only=True)
     health_status_badge = serializers.SerializerMethodField()
+    age_months = serializers.SerializerMethodField()
+    health_status = serializers.SerializerMethodField()
     
     class Meta:
         model = Animal
@@ -285,14 +287,36 @@ class LivestockListAdminSerializer(serializers.ModelSerializer):
     def get_health_status_badge(self, obj):
         colors = {'good': 'green', 'fair': 'orange', 'poor': 'red'}
         return {'text': obj.health_status or 'Unknown', 'color': colors.get(obj.health_status, 'gray')}
-
-
+            
+    def get_age_months(self,obj):
+        """Calculate age in months from birth_date"""
+        if obj.birth_date:
+            today = date.today()
+            months = (today.year-obj.birth_date.year)*12 + (today.month-obj.birth_date.month)
+            
+            return months
+        return None
+    
+    def get_health_status(self,obj):
+        """Determine health status based on available date"""
+        
+        if obj.status == 'active':
+            return 'Active'
+        elif obj.status == 'sold':
+            return 'Sold'
+        elif obj.status == 'dead':
+            return 'Deceased'
+        elif obj.status == 'butchered':
+            return 'Butchered'
+        return 'Unknown'
+            
+            
 class BreedingRecordAdminSerializer(serializers.ModelSerializer):
     animal_name = serializers.CharField(source='animal.name', read_only=True)
     farmer_name = serializers.CharField(source='animal.farmer.get_full_name', read_only=True)
     
     class Meta:
-        model = Animal  # Using breeding records from your existing model
+        model = Animal
         fields = '__all__'
 
 
