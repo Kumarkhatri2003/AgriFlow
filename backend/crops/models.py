@@ -409,7 +409,7 @@ class CropKnowledgeBase(models.Model):
 class CropRecommendationHistory(models.Model):
     farmer = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE)
     soil_type = models.CharField(max_length=50)
-    ph = models.FloatField()
+    ph = models.FloatField(null=True,blank=True)
     season = models.CharField(max_length=50)
     water_availability = models.CharField(max_length=20)
     region = models.CharField(max_length=50)
