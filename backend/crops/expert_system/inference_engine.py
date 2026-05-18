@@ -15,17 +15,29 @@ class WorkingMemory:
         self.rule_trace: List[Dict] = []
     
     def add_fact(self, fact_name: str, value: Any, certainty: float, source_rule_id: str = None):
-        if fact_name in self.facts:
-            # Handle adjustments to existing scores
-            if isinstance(value, dict) and "adjustment" in value:
+        """Add or update a fact in working memory"""
+        
+        # Handle adjustments to existing scores
+        if isinstance(value, dict) and "adjustment" in value:
+            if fact_name in self.facts:
                 if isinstance(self.facts[fact_name], dict):
+                    # Already a dict - accumulate adjustment
                     self.facts[fact_name]["adjustment"] = self.facts[fact_name].get("adjustment", 0) + value["adjustment"]
                 else:
-                    self.facts[fact_name] = value
+                    # Convert existing non-dict to dict with adjustment
+                    original_value = self.facts[fact_name]
+                    self.facts[fact_name] = {
+                        "original": original_value,
+                        "adjustment": value["adjustment"]
+                    }
+                # Update certainty (take max)
+                self.certainties[fact_name] = max(certainty, self.certainties.get(fact_name, 0))
             else:
-                self.facts[fact_name] = value
-            self.certainties[fact_name] = max(certainty, self.certainties.get(fact_name, 0))
+                # New fact with adjustment
+                self.facts[fact_name] = value.copy() if isinstance(value, dict) else {"adjustment": value["adjustment"]}
+                self.certainties[fact_name] = certainty
         else:
+            # Regular fact assignment
             self.facts[fact_name] = value
             self.certainties[fact_name] = certainty
         
@@ -38,9 +50,11 @@ class WorkingMemory:
             })
     
     def get_fact(self, fact_name: str) -> Optional[Any]:
+        """Get a fact from working memory"""
         return self.facts.get(fact_name)
     
     def get_certainty(self, fact_name: str) -> float:
+        """Get certainty factor for a fact"""
         return self.certainties.get(fact_name, 0.0)
 
 
@@ -59,16 +73,23 @@ class InferenceEngine:
         return None
     
     def _resolve_value(self, value: Any, crop: Crop) -> Any:
-        """Resolve crop.xxx references"""
+        """Resolve crop.xxx references and handle lists"""
+        if isinstance(value, list):
+            return [self._resolve_value(v, crop) for v in value]
         if isinstance(value, str) and value.startswith('crop.'):
             return self._get_crop_attr(crop, value)
         return value
     
     def is_rule_triggered(self, rule: Rule, crop: Crop) -> bool:
         """Check if all conditions are satisfied"""
-        # Iterate over the rule's conditions (NOT Rule.conditions)
         for condition in rule.conditions:
-            fact_value = self.working_memory.get_fact(condition["fact"])
+            fact_name = condition["fact"]
+            
+            # Check if condition references crop attributes
+            if fact_name.startswith("crop."):
+                fact_value = self._get_crop_attr(crop, fact_name)
+            else:
+                fact_value = self.working_memory.get_fact(fact_name)
             
             # Skip if fact is None and operator is not null check
             if fact_value is None and condition["operator"] not in ["is_null", "is_not_null"]:
@@ -91,10 +112,12 @@ class InferenceEngine:
         fact_name = conclusion["fact"]
         fact_value = conclusion["value"]
         
-        # Resolve crop references in the conclusion value
+        # Create new dict to avoid mutating original rules
         if isinstance(fact_value, dict):
+            resolved_value = {}
             for key, val in fact_value.items():
-                fact_value[key] = self._resolve_value(val, crop)
+                resolved_value[key] = self._resolve_value(val, crop)
+            fact_value = resolved_value
         else:
             fact_value = self._resolve_value(fact_value, crop)
         
@@ -125,7 +148,7 @@ class InferenceEngine:
             if not agenda:
                 break
             
-            # Select rule with highest priority
+            # Select rule with highest priority and specificity
             agenda.sort(key=lambda r: (r.priority, r.specificity), reverse=True)
             selected = agenda[0]
             

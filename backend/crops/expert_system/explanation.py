@@ -39,7 +39,7 @@ class Explanation:
             f"\n📝 {self.summary}",
         ]
         
-        # Add NPK status if available and has data
+        # Add NPK status if available
         if self.npk_status and self.npk_status.get('nitrogen'):
             lines.append("\n📊 NPK ANALYSIS:")
             for nutrient in ['nitrogen', 'phosphorus', 'potassium']:
@@ -84,26 +84,18 @@ class ExplanationFacility:
     ) -> Explanation:
         """Generate explanation for a crop recommendation"""
         
-        # Ensure npk_status is a dict with proper structure
         if npk_status is None:
             npk_status = {}
         
-        # Ensure npk_status has the expected keys
+        # Ensure npk_status has proper structure
         if not isinstance(npk_status, dict):
             npk_status = {}
         
-        # Ensure each nutrient has required fields
         for nutrient in ['nitrogen', 'phosphorus', 'potassium']:
             if nutrient not in npk_status:
                 npk_status[nutrient] = {'status': 'unknown', 'message': '', 'score': 0}
             elif not isinstance(npk_status[nutrient], dict):
                 npk_status[nutrient] = {'status': 'unknown', 'message': str(npk_status[nutrient]), 'score': 0}
-            elif 'status' not in npk_status[nutrient]:
-                npk_status[nutrient]['status'] = 'unknown'
-            elif 'message' not in npk_status[nutrient]:
-                npk_status[nutrient]['message'] = ''
-            elif 'score' not in npk_status[nutrient]:
-                npk_status[nutrient]['score'] = 0
         
         exp = Explanation(
             crop_name=crop_name,
@@ -140,14 +132,19 @@ class ExplanationFacility:
         for nutrient, status in npk_status.items():
             if nutrient != "total_score" and isinstance(status, dict):
                 status_value = status.get('status', '')
-                if status_value == "optimal":
+                if status_value == "Perfect":
                     exp.strengths.append({
-                        "reason": status.get('message', f"{nutrient.capitalize()} level is optimal"),
-                        "confidence": 0.8
+                        "reason": status.get('message', f"{nutrient.capitalize()} level is perfect"),
+                        "confidence": 0.9
                     })
-                elif "deficit" in status_value:
+                elif status_value == "Fits":
+                    exp.strengths.append({
+                        "reason": status.get('message', f"{nutrient.capitalize()} level is adequate"),
+                        "confidence": 0.7
+                    })
+                elif "Low" in status_value or "High" in status_value:
                     exp.weaknesses.append({
-                        "reason": status.get('message', f"{nutrient.capitalize()} level is low"),
+                        "reason": status.get('message', f"{nutrient.capitalize()} level is {status_value}"),
                         "mitigation": self._get_npk_mitigation(nutrient)
                     })
         
@@ -156,7 +153,7 @@ class ExplanationFacility:
             exp.summary = f"Strongly recommended. {crop_name} is well-suited to your farm conditions."
         elif confidence >= 0.60:
             exp.summary = f"Good choice. {crop_name} should perform well with standard management."
-        elif confidence >= 0.40:
+        elif confidence >= 0.50:
             exp.summary = f"Possible but requires attention to address key constraints."
         else:
             exp.summary = f"Not recommended. Too many constraints make {crop_name} unlikely to succeed."
@@ -199,9 +196,6 @@ class ExplanationFacility:
             "TEMP_STRESS": "Use mulch or row covers to retain heat",
             "FROST_RISK": "Delay planting or use frost protection",
             "REGION_MISMATCH": "Consider protected cultivation or different varieties",
-            "N_DEFICIENT": "Apply urea (50 kg/ropani) or compost",
-            "P_DEFICIENT": "Apply DAP (25 kg/ropani) or bone meal",
-            "K_DEFICIENT": "Apply MOP (20 kg/ropani) or wood ash",
         }
         return mitigations.get(rule_id, "")
     
@@ -224,8 +218,12 @@ class ExplanationFacility:
             for nutrient, status in npk_status.items():
                 if nutrient != "total_score" and isinstance(status, dict):
                     status_value = status.get('status', '')
-                    if "deficit" in status_value:
+                    if "Very Low" in status_value:
                         advice.append(self._get_npk_mitigation(nutrient))
+                    elif "Low" in status_value:
+                        advice.append(self._get_npk_mitigation(nutrient))
+                    elif "Very High" in status_value:
+                        advice.append(f"STOP adding {nutrient} fertilizer immediately")
         
         # Remove duplicates while preserving order
         seen = set()

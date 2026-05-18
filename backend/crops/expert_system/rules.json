@@ -6,7 +6,7 @@
       {"fact": "season", "operator": "eq", "value": "crop.best_season"}
     ],
     "conclusion": {"fact": "crop_score_adjustment", "value": {"adjustment": 25}},
-    "certainty": 0.9,
+    "certainty": 0.95,
     "priority": 7,
     "category": "soft",
     "explanation": "Current season is ideal for planting this crop"
@@ -18,7 +18,7 @@
       {"fact": "season", "operator": "in", "value": "crop.other_seasons"}
     ],
     "conclusion": {"fact": "crop_score_adjustment", "value": {"adjustment": 10}},
-    "certainty": 0.7,
+    "certainty": 0.80,
     "priority": 5,
     "category": "soft",
     "explanation": "Current season is acceptable for this crop"
@@ -29,9 +29,9 @@
     "conditions": [
       {"fact": "soil_type", "operator": "eq", "value": "crop.soil_ideal"}
     ],
-    "conclusion": {"fact": "crop_score_adjustment", "value": {"adjustment": 20}},
-    "certainty": 0.9,
-    "priority": 5,
+    "conclusion": {"fact": "crop_score_adjustment", "value": {"adjustment": 15}},
+    "certainty": 0.90,
+    "priority": 6,
     "category": "soft",
     "explanation": "Your soil type is ideal for this crop"
   },
@@ -41,8 +41,8 @@
     "conditions": [
       {"fact": "soil_type", "operator": "in", "value": "crop.soil_acceptable"}
     ],
-    "conclusion": {"fact": "crop_score_adjustment", "value": {"adjustment": 8}},
-    "certainty": 0.7,
+    "conclusion": {"fact": "crop_score_adjustment", "value": {"adjustment": 5}},
+    "certainty": 0.75,
     "priority": 4,
     "category": "soft",
     "explanation": "Your soil type is acceptable for this crop"
@@ -60,6 +60,18 @@
     "explanation": "Your region is suitable for this crop"
   },
   {
+    "rule_id": "REGION_MISMATCH_HARD",
+    "name": "Region mismatch hard constraint",
+    "conditions": [
+      {"fact": "region", "operator": "not_in", "value": "crop.region_suitable"}
+    ],
+    "conclusion": {"fact": "crop_possible", "value": false},
+    "certainty": 0.95,
+    "priority": 10,
+    "category": "hard_constraint",
+    "explanation": "This crop cannot grow in your region"
+  },
+  {
     "rule_id": "TEMP_OPTIMAL",
     "name": "Optimal temperature",
     "conditions": [
@@ -67,7 +79,7 @@
       {"fact": "temperature", "operator": "between", "value": ["crop.temp_min", "crop.temp_max"]}
     ],
     "conclusion": {"fact": "crop_score_adjustment", "value": {"adjustment": 10}},
-    "certainty": 0.7,
+    "certainty": 0.80,
     "priority": 4,
     "category": "soft",
     "explanation": "Temperature is within optimal range for this crop"
@@ -79,8 +91,8 @@
       {"fact": "water_source", "operator": "neq", "value": "rainfed_only"},
       {"fact": "crop.drought_tolerance", "operator": "neq", "value": "low"}
     ],
-    "conclusion": {"fact": "crop_score_adjustment", "value": {"adjustment": 10}},
-    "certainty": 0.7,
+    "conclusion": {"fact": "crop_score_adjustment", "value": {"adjustment": 8}},
+    "certainty": 0.75,
     "priority": 3,
     "category": "soft",
     "explanation": "Irrigation reduces drought risk for this crop"
@@ -92,8 +104,8 @@
       {"fact": "water_source", "operator": "eq", "value": "rainfed_only"},
       {"fact": "crop.drought_tolerance", "operator": "eq", "value": "high"}
     ],
-    "conclusion": {"fact": "crop_score_adjustment", "value": {"adjustment": 15}},
-    "certainty": 0.8,
+    "conclusion": {"fact": "crop_score_adjustment", "value": {"adjustment": 12}},
+    "certainty": 0.85,
     "priority": 5,
     "category": "soft",
     "explanation": "This crop is drought tolerant - good for rainfed farming"
@@ -105,7 +117,7 @@
       {"fact": "water_source", "operator": "eq", "value": "rainfed_only"},
       {"fact": "crop.drought_tolerance", "operator": "eq", "value": "low"}
     ],
-    "conclusion": {"fact": "crop_score_adjustment", "value": {"adjustment": -20}},
+    "conclusion": {"fact": "crop_score_adjustment", "value": {"adjustment": -15}},
     "certainty": 0.85,
     "priority": 5,
     "category": "soft",
@@ -114,15 +126,56 @@
   },
   {
     "rule_id": "PH_OPTIMAL",
-    "name": "Optimal pH",
+    "name": "Optimal pH for specific crop",
     "conditions": [
       {"fact": "ph", "operator": "is_not_null", "value": true},
-      {"fact": "ph", "operator": "between", "value": [6.0, 7.5]}
+      {"fact": "ph", "operator": "between", "value": ["crop.ph_min", "crop.ph_max"]}
     ],
-    "conclusion": {"fact": "crop_score_adjustment", "value": {"adjustment": 10}},
-    "certainty": 0.8,
+    "conclusion": {"fact": "crop_score_adjustment", "value": {"adjustment": 8}},
+    "certainty": 0.80,
+    "priority": 4,
+    "category": "soft",
+    "explanation": "Soil pH is within optimal range for this crop"
+  },
+  {
+    "rule_id": "PH_SUBOPTIMAL",
+    "name": "Suboptimal pH",
+    "conditions": [
+      {"fact": "ph", "operator": "is_not_null", "value": true},
+      {"fact": "ph", "operator": "is_not_null", "value": true}
+    ],
+    "conclusion": {"fact": "crop_score_adjustment", "value": {"adjustment": -5}},
+    "certainty": 0.65,
+    "priority": 2,
+    "category": "soft",
+    "explanation": "Soil pH is not optimal for this crop",
+    "mitigation": "Apply lime (low pH) or sulfur (high pH) 2-3 months before planting"
+  },
+  {
+    "rule_id": "FROST_RISK_HARD",
+    "name": "Frost kills sensitive crops",
+    "conditions": [
+      {"fact": "frost_risk", "operator": "eq", "value": true},
+      {"fact": "crop.frost_sensitive", "operator": "eq", "value": "yes"}
+    ],
+    "conclusion": {"fact": "crop_possible", "value": false},
+    "certainty": 0.95,
+    "priority": 10,
+    "category": "hard_constraint",
+    "explanation": "This crop will die from frost"
+  },
+  {
+    "rule_id": "FROST_TOLERANT_PENALTY",
+    "name": "Frost penalty for tolerant crops",
+    "conditions": [
+      {"fact": "frost_risk", "operator": "eq", "value": true},
+      {"fact": "crop.frost_sensitive", "operator": "eq", "value": "tolerant"}
+    ],
+    "conclusion": {"fact": "crop_score_adjustment", "value": {"adjustment": -10}},
+    "certainty": 0.70,
     "priority": 3,
     "category": "soft",
-    "explanation": "Soil pH is in optimal range for most crops"
+    "explanation": "This crop may survive light frost but will be stressed",
+    "mitigation": "Use row covers or plant in sheltered location"
   }
 ]

@@ -1,8 +1,12 @@
+"""
+Expert System Module for AgriFlow
+"""
+
 from .engine import AgriFlowExpertSystem, get_expert_system, get_recommendations
 from .knowledge_base import KnowledgeBase, Crop, Rule
 from .inference_engine import InferenceEngine, WorkingMemory
-from .uncertainty import UncertaintyManager, CertaintyFactors
 from .explanation import ExplanationFacility, Explanation
+from .uncertainty import UncertaintyManager, CertaintyFactors
 
 __all__ = [
     'AgriFlowExpertSystem',
@@ -13,8 +17,8 @@ __all__ = [
     'Rule',
     'InferenceEngine',
     'WorkingMemory',
+    'ExplanationFacility',
+    'Explanation',
     'UncertaintyManager',
     'CertaintyFactors',
-    'ExplanationFacility',
-    'Explanation'
 ]
