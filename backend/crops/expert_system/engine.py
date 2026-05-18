@@ -1,3 +1,8 @@
+"""
+AgriFlow Expert System - Main Orchestration
+Hybrid Rule-Based Crop Recommendation Engine
+"""
+
 from typing import Dict, List, Any
 from datetime import datetime
 from dataclasses import dataclass
@@ -54,8 +59,8 @@ class AgriFlowExpertSystem:
             soil_acceptable = [s.strip() for s in db_crop.soil_other.split(',') if s.strip()] if db_crop.soil_other else []
             region_suitable = [r.strip() for r in db_crop.region_suitable.split(',') if r.strip()] if db_crop.region_suitable else []
             
-            # Convert frost_sensitive from string to bool
-            frost_sensitive = db_crop.frost_sensitive in ['yes', 'tolerant']
+            # Keep frost_sensitive as string (not boolean)
+            frost_sensitive = db_crop.frost_sensitive  # 'yes', 'no', or 'tolerant'
             
             crop_dict = {
                 "id": db_crop.id,
@@ -75,7 +80,6 @@ class AgriFlowExpertSystem:
                 "ph_ideal": db_crop.ph_ideal,
                 "ph_min": db_crop.ph_min,
                 "ph_max": db_crop.ph_max,
-                # NPK values from database
                 "n_need_min": max(20, db_crop.n_need * 0.6),
                 "n_need_max": db_crop.n_need * 1.4,
                 "p_need_min": max(10, db_crop.p_need * 0.6),
@@ -85,7 +89,7 @@ class AgriFlowExpertSystem:
                 "region_suitable": region_suitable,
                 "best_season": db_crop.best_season,
                 "other_seasons": other_seasons,
-                "frost_sensitive": frost_sensitive,
+                "frost_sensitive": frost_sensitive,  # String: 'yes', 'no', 'tolerant'
                 "day_length_sensitive": False,
                 "day_length_type": None,
                 "growing_days": 100,
@@ -158,7 +162,7 @@ class AgriFlowExpertSystem:
             "water_source": farmer_data.get("water_source", "rainfed_only"),
             "season": season,
             "temperature": temperature,
-            "frost_risk": farmer_data.get("elevation_risk"),
+            "frost_risk": farmer_data.get("elevation_risk", False),
             "ph": farmer_data.get("ph"),
             "n": n_value,
             "p": p_value,
@@ -171,11 +175,24 @@ class AgriFlowExpertSystem:
             # Run inference for all rules
             working_memory = self.inference.forward_chaining(initial_facts, crop)
             
-            # ========== HARSH SCORING - MUST EARN EVERY POINT ==========
+            # ========== EXTRACT RULE ADJUSTMENTS ==========
+            rule_adjustment = 0
+            adjustment_fact = working_memory.get_fact("crop_score_adjustment")
+            if adjustment_fact and isinstance(adjustment_fact, dict):
+                rule_adjustment = adjustment_fact.get("adjustment", 0)
+            
+            # ========== COMBINE CERTAINTY FACTORS ==========
+            rule_certainties = [
+                trace["certainty"] 
+                for trace in working_memory.rule_trace 
+                if "certainty" in trace
+            ]
+            combined_cf = UncertaintyManager.combine_multiple(rule_certainties) if rule_certainties else 1.0
+            
+            # ========== HARSH SCORING ==========
             total_score = 0.0
             
-            # 1. SEASON (30 points - MUST match)
-            season_score = 0
+            # 1. SEASON (30 points)
             if season == crop.best_season:
                 season_score = 30
             elif season in crop.other_seasons:
@@ -184,8 +201,7 @@ class AgriFlowExpertSystem:
                 season_score = 0
             total_score += season_score
             
-            # 2. REGION (20 points - MUST match)
-            region_score = 0
+            # 2. REGION (20 points)
             if region in crop.region_suitable:
                 region_score = 20
             else:
@@ -193,7 +209,6 @@ class AgriFlowExpertSystem:
             total_score += region_score
             
             # 3. SOIL (15 points)
-            soil_score = 0
             soil_type = farmer_data.get("soil_type", "loamy")
             if soil_type == crop.soil_ideal:
                 soil_score = 15
@@ -204,7 +219,6 @@ class AgriFlowExpertSystem:
             total_score += soil_score
             
             # 4. TEMPERATURE (15 points)
-            temp_score = 0
             if crop.temp_min <= temperature <= crop.temp_max:
                 optimal_center = (crop.temp_min + crop.temp_max) / 2
                 deviation = abs(temperature - optimal_center)
@@ -227,7 +241,6 @@ class AgriFlowExpertSystem:
             total_score += temp_score
             
             # 5. WATER (10 points)
-            water_score = 0
             water_source = farmer_data.get("water_source", "rainfed_only")
             if water_source != "rainfed_only":
                 water_score = 10
@@ -241,7 +254,6 @@ class AgriFlowExpertSystem:
             total_score += water_score
             
             # 6. pH (10 points)
-            ph_score = 0
             ph_value = farmer_data.get("ph")
             if ph_value is not None:
                 if crop.ph_min <= ph_value <= crop.ph_max:
@@ -254,10 +266,10 @@ class AgriFlowExpertSystem:
                 else:
                     ph_score = 0
             else:
-                ph_score = 5
+                ph_score = 5  # Default when no soil test
             total_score += ph_score
             
-            # 7. FROST (PENALTY)
+            # 7. FROST (PENALTY) - Now works correctly with string values
             frost_risk = farmer_data.get("elevation_risk", False)
             if frost_risk:
                 if crop.frost_sensitive == 'yes':
@@ -267,10 +279,11 @@ class AgriFlowExpertSystem:
             
             # 8. NPK (BONUS)
             npk_bonus = 0
+            npk_result = {}
             if n_value is not None and p_value is not None and k_value is not None:
                 npk_result = self._score_npk(crop, n_value, p_value, k_value)
                 npk_score = npk_result.get("total_score", 0)
-                npk_bonus = min(10, npk_score / 10)
+                npk_bonus = min(10, max(-10, npk_score / 10))  # Cap between -10 and +10
                 total_score += npk_bonus
             
             # 9. LABOR PENALTY
@@ -296,30 +309,32 @@ class AgriFlowExpertSystem:
             elif goal == "mixed":
                 total_score += 3
             
+            # 12. RULE ADJUSTMENTS from inference
+            total_score += rule_adjustment
+            
             # Cap at 100, minimum 0
             total_score = max(0, min(100, total_score))
-            confidence = total_score / 100
+            
+            # Calculate base confidence
+            base_confidence = total_score / 100
+            
+            # Apply certainty factor to get final confidence
+            final_confidence = base_confidence * combined_cf
+            final_confidence = max(0.0, min(1.0, final_confidence))
             
             # ========== REJECT ALL CROPS BELOW 50% ==========
-            # Changed from 0.40 to 0.50
-            if confidence < 0.50:
+            if final_confidence < 0.50:
                 continue
             
-            # Check if crop is possible (hard constraints failed)
-            is_possible = True
-            for fact_name, fact_value in working_memory.facts.items():
-                if fact_name == "crop_possible" and fact_value is False:
-                    is_possible = False
-                    confidence = 0.0
-                    break
-            
-            if not is_possible:
+            # Check if crop is possible (hard constraints from inference)
+            crop_possible = working_memory.get_fact("crop_possible")
+            if crop_possible is False:
                 continue
             
             # Determine feasibility
-            if confidence >= 0.75:
+            if final_confidence >= 0.75:
                 feasibility = "high"
-            elif confidence >= 0.60:
+            elif final_confidence >= 0.60:
                 feasibility = "medium"
             else:
                 feasibility = "low"  # 50-60% range
@@ -336,7 +351,7 @@ class AgriFlowExpertSystem:
                 crop.name_en,
                 crop_dict,
                 working_memory,
-                confidence,
+                final_confidence,
                 npk_status=npk_result
             )
             
@@ -350,13 +365,15 @@ class AgriFlowExpertSystem:
                 "water": water_score,
                 "ph": ph_score,
                 "npk_bonus": npk_bonus,
+                "rule_adjustment": rule_adjustment,
+                "certainty_factor": combined_cf,
             }
             
             recommendations.append(Recommendation(
                 crop_id=crop.id,
                 crop_name=crop.name_en,
                 crop_name_np=crop.name_np,
-                confidence=confidence,
+                confidence=final_confidence,
                 feasibility=feasibility,
                 explanation=explanation,
                 actionable_advice=explanation.actionable_advice,
@@ -368,6 +385,7 @@ class AgriFlowExpertSystem:
         recommendations.sort(key=lambda x: x.confidence, reverse=True)
         
         return recommendations
+
 
 # Singleton instance
 _expert_system = None
@@ -390,8 +408,8 @@ def get_recommendations(crops_queryset, farmer_data: Dict) -> Dict:
     
     recommendations = es.recommend(farmer_data)
     
-    # Filter to feasible crops (confidence > 0.3)
-    feasible = [r for r in recommendations if r.confidence >= 0.3]
+    # Filter to feasible crops (confidence >= 0.50)
+    feasible = [r for r in recommendations if r.confidence >= 0.50]
     
     summary = {
         "total_evaluated": len(recommendations),

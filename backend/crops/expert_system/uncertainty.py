@@ -10,7 +10,7 @@ class UncertaintyManager:
     
     @staticmethod
     def combine_certainty(cf1: float, cf2: float) -> float:
-        """Combine two certainty factors"""
+        """Combine two certainty factors using Shortliffe-Buchanan formula"""
         if cf1 is None:
             return cf2 or 0
         if cf2 is None:

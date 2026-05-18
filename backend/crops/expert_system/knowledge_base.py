@@ -1,3 +1,7 @@
+"""
+Knowledge Base - Stores crops and rules
+"""
+
 from statistics import median
 from typing import Dict, List, Any, Optional
 from dataclasses import dataclass, field
@@ -77,6 +81,14 @@ class Rule:
             else:
                 test_list = [str(test_value)]
             return str(fact_value) in [str(v) for v in test_list]
+        elif operator == "not_in":
+            if isinstance(test_value, str):
+                test_list = [v.strip() for v in test_value.split(',')]
+            elif isinstance(test_value, list):
+                test_list = test_value
+            else:
+                test_list = [str(test_value)]
+            return str(fact_value) not in [str(v) for v in test_list]
         elif operator == "contains":
             return str(test_value) in str(fact_value)
         elif operator == "between":
@@ -129,7 +141,7 @@ class Crop:
     region_suitable: List[str]
     best_season: str
     other_seasons: List[str]
-    frost_sensitive: bool
+    frost_sensitive: str  # 'yes', 'no', 'tolerant'
     day_length_sensitive: bool = False
     day_length_type: Optional[str] = None
     growing_days: int = 100
@@ -138,7 +150,6 @@ class Crop:
     
     labor_req: str = "medium"
     storage_life: str = "medium"
-    
 
     def to_dict(self) -> Dict:
         return {
@@ -160,10 +171,11 @@ class Crop:
             "ph_ideal": self.ph_ideal,
             "labor_req": self.labor_req,
             "storage_life": self.storage_life,
+            "frost_sensitive": self.frost_sensitive,
         }
     
     def get_npk_status(self, n: float, p: float, k: float) -> Dict:
-        
+        """Calculate NPK match score with graduated tiers"""
         status = {
             "nitrogen": {"status": "Fits", "message": "", "suggestion": "", "score": 0},
             "phosphorus": {"status": "Fits", "message": "", "suggestion": "", "score": 0},
@@ -174,9 +186,9 @@ class Crop:
         # ========== NITROGEN SCORING ==========
         if n is not None:
             if self.n_need_min <= n <= self.n_need_max:
-                # Check if it's perfectly centered
                 center = (self.n_need_min + self.n_need_max) / 2
-                if abs(n - center) <= (self.n_need_max - self.n_need_min) * 0.2:
+                half_range = (self.n_need_max - self.n_need_min) / 2
+                if half_range > 0 and abs(n - center) <= half_range * 0.2:
                     status["nitrogen"] = {
                         "status": "Perfect", 
                         "message": f"N: {n} kg/ha is perfect for this crop", 
@@ -192,7 +204,7 @@ class Crop:
                     }
             elif n < self.n_need_min:
                 deficit = self.n_need_min - n
-                deficit_percent = (deficit / self.n_need_min) * 100
+                deficit_percent = (deficit / self.n_need_min) * 100 if self.n_need_min > 0 else 0
                 if deficit_percent < 20:
                     status["nitrogen"] = {
                         "status": "Low", 
@@ -209,7 +221,7 @@ class Crop:
                     }
             else:  # n > n_need_max
                 excess = n - self.n_need_max
-                excess_percent = (excess / self.n_need_max) * 100
+                excess_percent = (excess / self.n_need_max) * 100 if self.n_need_max > 0 else 0
                 if excess_percent < 20:
                     status["nitrogen"] = {
                         "status": "High", 
@@ -229,7 +241,8 @@ class Crop:
         if p is not None:
             if self.p_need_min <= p <= self.p_need_max:
                 center = (self.p_need_min + self.p_need_max) / 2
-                if abs(p - center) <= (self.p_need_max - self.p_need_min) * 0.2:
+                half_range = (self.p_need_max - self.p_need_min) / 2
+                if half_range > 0 and abs(p - center) <= half_range * 0.2:
                     status["phosphorus"] = {
                         "status": "Perfect", 
                         "message": f"P: {p} kg/ha is perfect for this crop", 
@@ -245,7 +258,7 @@ class Crop:
                     }
             elif p < self.p_need_min:
                 deficit = self.p_need_min - p
-                deficit_percent = (deficit / self.p_need_min) * 100
+                deficit_percent = (deficit / self.p_need_min) * 100 if self.p_need_min > 0 else 0
                 if deficit_percent < 20:
                     status["phosphorus"] = {
                         "status": "Low", 
@@ -262,7 +275,7 @@ class Crop:
                     }
             else:  # p > p_need_max
                 excess = p - self.p_need_max
-                excess_percent = (excess / self.p_need_max) * 100
+                excess_percent = (excess / self.p_need_max) * 100 if self.p_need_max > 0 else 0
                 if excess_percent < 20:
                     status["phosphorus"] = {
                         "status": "High", 
@@ -282,7 +295,8 @@ class Crop:
         if k is not None:
             if self.k_need_min <= k <= self.k_need_max:
                 center = (self.k_need_min + self.k_need_max) / 2
-                if abs(k - center) <= (self.k_need_max - self.k_need_min) * 0.2:
+                half_range = (self.k_need_max - self.k_need_min) / 2
+                if half_range > 0 and abs(k - center) <= half_range * 0.2:
                     status["potassium"] = {
                         "status": "Perfect", 
                         "message": f"K: {k} kg/ha is perfect for this crop", 
@@ -298,7 +312,7 @@ class Crop:
                     }
             elif k < self.k_need_min:
                 deficit = self.k_need_min - k
-                deficit_percent = (deficit / self.k_need_min) * 100
+                deficit_percent = (deficit / self.k_need_min) * 100 if self.k_need_min > 0 else 0
                 if deficit_percent < 20:
                     status["potassium"] = {
                         "status": "Low", 
@@ -315,7 +329,7 @@ class Crop:
                     }
             else:  # k > k_need_max
                 excess = k - self.k_need_max
-                excess_percent = (excess / self.k_need_max) * 100
+                excess_percent = (excess / self.k_need_max) * 100 if self.k_need_max > 0 else 0
                 if excess_percent < 20:
                     status["potassium"] = {
                         "status": "High", 
@@ -331,7 +345,7 @@ class Crop:
                         "score": -15
                     }
         
-        # Calculate total NPK score (can be negative!)
+        # Calculate total NPK score
         total = 0
         for key in ["nitrogen", "phosphorus", "potassium"]:
             total += status[key]["score"]
