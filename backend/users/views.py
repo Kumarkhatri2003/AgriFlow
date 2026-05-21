@@ -57,6 +57,16 @@ class LoginView(generics.GenericAPIView):
         serializer = self.get_serializer(data=request.data)
 
         if serializer.is_valid():
+            # Generate notifications/reminders for the farmer on login if needed
+            try:
+                user_email = serializer.validated_data.get('user', {}).get('email')
+                if user_email:
+                    user = User.objects.get(email=user_email)
+                    from notifications.utils import generate_user_alerts_and_reminders_if_needed
+                    generate_user_alerts_and_reminders_if_needed(user)
+            except Exception as e:
+                print(f"Error generating alerts on login: {e}")
+
             return Response({
                 'success': True,
                 'message': 'Login successful',

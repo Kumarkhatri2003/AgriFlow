@@ -275,6 +275,7 @@ class User(AbstractUser):
     privacy_accepted_at = models.DateTimeField(blank=True, null=True)
     
     # ============ TIMESTAMPS ============
+    last_reminder_generation = models.DateField(null=True, blank=True)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
     
