@@ -1,7 +1,7 @@
 from rest_framework import serializers
 from .models import (
     Crop, FertilizerRecord, PesticideRecord, 
-    CropExpense, CropIncome, HarvestRecord,Labour,CropKnowledgeBase,CropRecommendationHistory
+    CropExpense, CropIncome, HarvestRecord,Labour,CropKnowledgeBase,CropRecommendationHistory,CropTypeConfig,CropActivityRule
 )
 
 # ==================== FERTILIZER SERIALIZER ====================
@@ -679,3 +679,55 @@ class CropRecommendationHistorySerializer(serializers.ModelSerializer):
             'experience', 'goal', 'recommendations', 'created_at'
         ]
         read_only_fields = ['farmer', 'created_at']
+        
+class CropTypeConfigSerializer(serializers.ModelSerializer):
+    """Serializer for CropTypeConfig with computed display fields"""
+    
+    display_name = serializers.SerializerMethodField()
+    region_display = serializers.SerializerMethodField()
+    season_display = serializers.SerializerMethodField()
+    
+    class Meta:
+        model = CropTypeConfig
+        fields = [
+            'id', 'crop_name', 'variety', 'region', 'region_display',
+            'season', 'season_display', 'display_name',
+            'germination_start_day', 'germination_end_day',
+            'vegetative_start_day', 'vegetative_end_day',
+            'flowering_start_day', 'flowering_end_day',
+            'maturation_start_day', 'maturation_end_day',
+            'harvest_start_day', 'harvest_end_day',
+            'total_growing_days', 'is_active'
+        ]
+        
+        def get_display_name(self, obj):
+            return obj.get_display_name()
+    
+        def get_region_display(self, obj):
+            return obj.get_region_display()
+    
+        def get_season_display(self, obj):
+            return obj.get_season_display()
+        
+
+class CropActivityRuleSerializer(serializers.ModelSerializer):
+    """Serializer for CropActivityRule with nested config details"""
+    
+    crop_config_details = CropTypeConfigSerializer(source='crop_config', read_only=True)
+    growth_stage_display = serializers.SerializerMethodField()
+    
+    class Meta:
+        model = CropActivityRule
+        fields = [
+            'id', 'crop_config', 'crop_config_details',
+            'growth_stage', 'growth_stage_display',
+            'title', 'title_np', 'description', 'description_np',
+            'measurements', 'target_pest', 'recommendations',
+            'day_offset', 'order', 'is_active', 'created_at', 'updated_at'
+        ]
+        read_only_fields = ['created_at', 'updated_at']
+        
+        
+    def get_growth_stage_display(self, obj):
+        return obj.get_growth_stage_display()
+

@@ -1,16 +1,19 @@
-from rest_framework import generics, permissions, status
+from rest_framework import generics, permissions,viewsets, status
 from rest_framework.response import Response
 from rest_framework.views import APIView
-from rest_framework.permissions import IsAuthenticated
 from django.shortcuts import get_object_or_404
-
+from rest_framework.permissions import IsAuthenticated, IsAdminUser
+from rest_framework.decorators import action
+from datetime import date
+from .services.reminder_service import CropReminderService
 from .expert_system import get_recommendations
 from .models import (
     Crop, CropRecommendationHistory, FertilizerRecord, PesticideRecord, 
-    CropExpense, CropIncome, HarvestRecord, Labour,CropKnowledgeBase
+    CropExpense, CropIncome, HarvestRecord, Labour,CropKnowledgeBase, CropTypeConfig, CropActivityRule
 )
 
 from .serializers import (
+    CropKnowledgeBaseSerializer,
     CropRecommendationHistorySerializer,
     CropRecommendationRequestSerializer,
     CropSerializer,
@@ -26,6 +29,8 @@ from .serializers import (
     HarvestRecordCreateSerializer,
     LaborSerializer,
     LaborCreateSerializer,
+    CropTypeConfigSerializer, 
+    CropActivityRuleSerializer
 
 )
 import uuid
@@ -38,7 +43,11 @@ class CropListCreateView(generics.ListCreateAPIView):
     permission_classes = [permissions.IsAuthenticated]
     
     def get_queryset(self):
-        return Crop.objects.filter(farmer=self.request.user)
+        queryset = Crop.objects.filter(farmer=self.request.user)
+        # Auto-update growth stages for active crops
+        for crop in queryset.filter(status='active'):
+            crop.update_growth_stage(save=True)
+        return queryset
     
     def perform_create(self, serializer):
         serializer.save(farmer=self.request.user)
@@ -51,6 +60,13 @@ class CropDetailView(generics.RetrieveUpdateDestroyAPIView):
     
     def get_queryset(self):
         return Crop.objects.filter(farmer=self.request.user)
+
+    def retrieve(self, request, *args, **kwargs):
+        instance = self.get_object()
+        if instance.status == 'active':
+            instance.update_growth_stage(save=True)
+        serializer = self.get_serializer(instance)
+        return Response(serializer.data)
 
 
 # ==================== FERTILIZER VIEWS ====================
@@ -469,3 +485,433 @@ class CropRecommendationHistoryView(APIView):
                 'success': False,
                 'error': 'History entry not found'
             }, status=status.HTTP_404_NOT_FOUND)
+            
+            
+            
+
+# ==================== CROP TYPE CONFIG VIEWS ====================
+
+from admin_panel.permissions import IsAdminUser as PanelAdminUser
+
+class CropTypeConfigListView(generics.ListCreateAPIView):
+    """
+    GET /api/crop-configs/ - List all crop type configurations
+    POST /api/crop-configs/ - Create new config (Admin only)
+    """
+    queryset = CropTypeConfig.objects.all()
+    serializer_class = CropTypeConfigSerializer
+    
+    def get_permissions(self):
+        if self.request.method == 'GET':
+            return [IsAuthenticated()]
+        return [IsAuthenticated(), PanelAdminUser()]
+    
+    def get_queryset(self):
+        # Allow admins to see inactive configs, normal users only active
+        is_admin = getattr(self.request.user, 'is_admin', False)
+        if is_admin:
+            queryset = CropTypeConfig.objects.all()
+        else:
+            queryset = CropTypeConfig.objects.filter(is_active=True)
+        
+        # Filter by crop_name
+        crop_name = self.request.query_params.get('crop_name')
+        if crop_name:
+            queryset = queryset.filter(crop_name__iexact=crop_name)
+        
+        # Filter by region
+        region = self.request.query_params.get('region')
+        if region:
+            queryset = queryset.filter(region=region)
+        
+        return queryset
+
+
+class CropTypeConfigDetailView(generics.RetrieveUpdateDestroyAPIView):
+    """
+    GET /api/crop-configs/{id}/
+    PUT /api/crop-configs/{id}/
+    DELETE /api/crop-configs/{id}/
+    """
+    queryset = CropTypeConfig.objects.all()
+    serializer_class = CropTypeConfigSerializer
+    permission_classes = [IsAuthenticated, PanelAdminUser]
+    lookup_field = 'id'
+
+
+# ==================== CROP ACTIVITY RULE VIEWS ====================
+
+class CropActivityRuleViewSet(viewsets.ModelViewSet):
+    """
+    ViewSet for CropActivityRule with CRUD operations
+    GET /api/crop-activity-rules/
+    POST /api/crop-activity-rules/
+    GET /api/crop-activity-rules/{id}/
+    PUT /api/crop-activity-rules/{id}/
+    PATCH /api/crop-activity-rules/{id}/
+    DELETE /api/crop-activity-rules/{id}/
+    """
+    queryset = CropActivityRule.objects.all()
+    serializer_class = CropActivityRuleSerializer
+    lookup_field = 'id'
+    
+    def get_permissions(self):
+        if self.action in ['list', 'retrieve']:
+            return [IsAuthenticated()]
+        return [IsAuthenticated(), PanelAdminUser()]
+    
+    def get_queryset(self):
+        # Allow admins to see inactive rules, normal users only active
+        is_admin = getattr(self.request.user, 'is_admin', False)
+        if is_admin:
+            queryset = CropActivityRule.objects.all()
+        else:
+            queryset = CropActivityRule.objects.filter(is_active=True)
+        
+        # Filter by crop_config
+        crop_config_id = self.request.query_params.get('crop_config')
+        if crop_config_id:
+            queryset = queryset.filter(crop_config_id=crop_config_id)
+        
+        # Filter by growth_stage
+        growth_stage = self.request.query_params.get('growth_stage')
+        if growth_stage:
+            queryset = queryset.filter(growth_stage=growth_stage)
+        
+        # Filter by is_active
+        is_active = self.request.query_params.get('is_active')
+        if is_active is not None:
+            queryset = queryset.filter(is_active=is_active.lower() == 'true')
+        
+        return queryset
+    
+    def perform_destroy(self, instance):
+        """Soft delete - just mark as inactive"""
+        instance.is_active = False
+        instance.save()
+
+
+# ==================== CROP KNOWLEDGE BASE VIEWS ====================
+
+class CropKnowledgeBaseListView(generics.ListCreateAPIView):
+    """
+    GET /api/crops/api/knowledge-base/ - List knowledge base entries
+    POST /api/crops/api/knowledge-base/ - Create a knowledge base entry (Admin only)
+    """
+    queryset = CropKnowledgeBase.objects.all()
+    serializer_class = CropKnowledgeBaseSerializer
+    
+    def get_permissions(self):
+        if self.request.method == 'GET':
+            return [IsAuthenticated()]
+        return [IsAuthenticated(), PanelAdminUser()]
+
+    def get_queryset(self):
+        queryset = CropKnowledgeBase.objects.all()
+        from django.db.models import Q
+        
+        # Search by english or nepali name
+        search = self.request.query_params.get('search')
+        if search:
+            queryset = queryset.filter(
+                Q(name_en__icontains=search) | 
+                Q(name_np__icontains=search)
+            )
+            
+        category = self.request.query_params.get('category')
+        if category:
+            queryset = queryset.filter(category=category)
+            
+        season = self.request.query_params.get('season')
+        if season:
+            queryset = queryset.filter(best_season=season)
+            
+        return queryset
+
+
+class CropKnowledgeBaseDetailView(generics.RetrieveUpdateDestroyAPIView):
+    """
+    GET /api/crops/api/knowledge-base/{id}/ - Get details of a knowledge base entry
+    PUT /api/crops/api/knowledge-base/{id}/ - Update a knowledge base entry (Admin only)
+    DELETE /api/crops/api/knowledge-base/{id}/ - Delete a knowledge base entry (Admin only)
+    """
+    queryset = CropKnowledgeBase.objects.all()
+    serializer_class = CropKnowledgeBaseSerializer
+    lookup_field = 'pk'
+    
+    def get_permissions(self):
+        if self.request.method == 'GET':
+            return [IsAuthenticated()]
+        return [IsAuthenticated(), PanelAdminUser()]
+
+
+
+# ==================== CROP CONFIGURATION OPTIONS VIEWS ====================
+
+class CropConfigOptionsView(generics.GenericAPIView):
+    """
+    GET /api/crop-config-options/
+    Get all crop configs grouped for dropdown with "Other" option support
+    """
+    permission_classes = [IsAuthenticated]
+    
+    def get(self, request):
+        configs = CropTypeConfig.objects.filter(is_active=True).select_related()
+        
+        # Group by crop_name
+        grouped = {}
+        for config in configs:
+            crop_name = config.crop_name
+            if crop_name not in grouped:
+                grouped[crop_name] = []
+            
+            grouped[crop_name].append({
+                'id': config.id,
+                'display_name': config.get_display_name(),
+                'variety': config.variety or '',
+                'region': config.region or '',
+                'season': config.season or '',
+            })
+        
+        # Get list of crop names
+        crop_names = list(grouped.keys())
+        
+        return Response({
+            'configured_crops': crop_names,
+            'crop_configs': grouped,
+            'has_configured_crops': len(crop_names) > 0
+        })
+
+
+class AvailableCropsView(generics.GenericAPIView):
+    """
+    GET /api/available-crops/
+    Get list of available crops with their varieties, regions, seasons
+    """
+    permission_classes = [IsAuthenticated]
+    
+    def get(self, request):
+        # Get unique crop names with their config count
+        crops = CropTypeConfig.objects.filter(is_active=True).values('crop_name').distinct().order_by('crop_name')
+        
+        result = []
+        for crop in crops:
+            crop_name = crop['crop_name']
+            
+            # Get all configs for this crop
+            configs = CropTypeConfig.objects.filter(crop_name=crop_name, is_active=True)
+            
+            # Extract unique values
+            varieties = list(configs.exclude(variety='').values_list('variety', flat=True).distinct())
+            regions = list(configs.values_list('region', flat=True).distinct())
+            seasons = list(configs.exclude(season__isnull=True).values_list('season', flat=True).distinct())
+            
+            # Get region display names
+            region_display_map = dict(CropTypeConfig.REGION_CHOICES)
+            region_displays = [region_display_map.get(r, r) for r in regions]
+            
+            # Get season display names
+            season_display_map = dict(CropTypeConfig.SEASON_CHOICES)
+            season_displays = [season_display_map.get(s, s) for s in seasons]
+            
+            result.append({
+                'crop_name': crop_name,
+                'varieties': varieties,
+                'regions': regions,
+                'region_displays': region_displays,
+                'seasons': seasons,
+                'season_displays': season_displays,
+                'has_config': True
+            })
+        
+        return Response({
+            'crops': result,
+            'total': len(result)
+        })
+
+
+# ==================== REMINDER VIEWS ====================
+
+class GenerateCropRemindersView(generics.GenericAPIView):
+    """
+    POST /api/crops/reminders/generate/
+    Manually generate reminders for user's crops
+    """
+    permission_classes = [IsAuthenticated]
+    
+    def post(self, request):
+        from crops.models import Crop
+        
+        crops = Crop.objects.filter(farmer=request.user, status='active')
+        total_reminders = 0
+        results = []
+        
+        for crop in crops:
+            reminders = CropReminderService.generate_reminders_for_crop(crop)
+            total_reminders += len(reminders)
+            results.append({
+                'crop_id': str(crop.id),
+                'crop_name': crop.name,
+                'reminders': len(reminders)
+            })
+        
+        return Response({
+            'success': True,
+            'total_crops': crops.count(),
+            'total_reminders': total_reminders,
+            'results': results
+        })
+
+
+class PendingCropActivitiesView(generics.GenericAPIView):
+    """
+    GET /api/crops/reminders/pending/
+    Get pending crop activities from notifications
+    """
+    permission_classes = [IsAuthenticated]
+    
+    def get(self, request):
+        from notifications.models import Notification
+        from notifications.i18n import get_request_language, notification_to_dict
+
+        lang = get_request_language(request)
+        pending = Notification.objects.filter(
+            farmer=request.user,
+            notification_type='crop',
+            is_completed=False,
+        ).order_by('-priority', '-created_at')
+
+        return Response({
+            'success': True,
+            'lang': lang,
+            'total': pending.count(),
+            'activities': [notification_to_dict(n, lang) for n in pending],
+        })
+
+
+class CropRemindersByCropView(generics.GenericAPIView):
+    """
+    POST /api/crops/{crop_id}/reminders/generate/
+    Generate reminders for a specific crop
+    """
+    permission_classes = [IsAuthenticated]
+    
+    def post(self, request, crop_id):
+        from crops.models import Crop
+        
+        try:
+            crop = Crop.objects.get(id=crop_id, farmer=request.user, status='active')
+            reminders = CropReminderService.generate_reminders_for_crop(crop)
+            
+            return Response({
+                'success': True,
+                'crop_id': str(crop.id),
+                'crop_name': crop.name,
+                'reminders_generated': len(reminders),
+                'reminders': [
+                    {
+                        'id': r.id,
+                        'title': r.title,
+                        'priority': r.priority,
+                        'created_at': r.created_at.isoformat()
+                    }
+                    for r in reminders
+                ]
+            })
+        except Crop.DoesNotExist:
+            return Response({
+                'success': False,
+                'error': 'Crop not found'
+            }, status=status.HTTP_404_NOT_FOUND)
+
+
+class MarkCropActivityReadView(generics.GenericAPIView):
+    """
+    POST /api/crops/reminders/{notification_id}/read/
+    Mark a crop activity notification as read
+    """
+    permission_classes = [IsAuthenticated]
+    
+    def post(self, request, notification_id):
+        from notifications.models import Notification
+        
+        try:
+            notification = Notification.objects.get(
+                id=notification_id,
+                farmer=request.user,
+                notification_type='crop'
+            )
+            notification.mark_as_read()
+            
+            return Response({
+                'success': True,
+                'message': 'Activity marked as read'
+            })
+        except Notification.DoesNotExist:
+            return Response({
+                'success': False,
+                'error': 'Notification not found'
+            }, status=status.HTTP_404_NOT_FOUND)
+
+
+# ==================== STATISTICS VIEW ====================
+
+class CropReminderStatsView(generics.GenericAPIView):
+    """
+    GET /api/crops/reminders/stats/
+    Get reminder statistics for the farmer
+    """
+    permission_classes = [IsAuthenticated]
+    
+    def get(self, request):
+        from crops.models import Crop
+        from notifications.models import Notification
+        
+        # Get crop counts
+        total_crops = Crop.objects.filter(farmer=request.user).count()
+        active_crops = Crop.objects.filter(farmer=request.user, status='active').count()
+        
+        # Get notification stats
+        today = date.today()
+        
+        pending_today = Notification.objects.filter(
+            farmer=request.user,
+            notification_type='crop',
+            is_read=False,
+            created_at__date=today
+        ).count()
+        
+        pending_total = Notification.objects.filter(
+            farmer=request.user,
+            notification_type='crop',
+            is_read=False
+        ).count()
+        
+        # Get by priority
+        critical_count = Notification.objects.filter(
+            farmer=request.user,
+            notification_type='crop',
+            is_read=False,
+            priority='critical'
+        ).count()
+        
+        warning_count = Notification.objects.filter(
+            farmer=request.user,
+            notification_type='crop',
+            is_read=False,
+            priority='medium'
+        ).count()
+        
+        return Response({
+            'success': True,
+            'crops': {
+                'total': total_crops,
+                'active': active_crops
+            },
+            'notifications': {
+                'pending_today': pending_today,
+                'pending_total': pending_total,
+                'critical': critical_count,
+                'warning': warning_count
+            }
+        })
