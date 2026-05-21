@@ -46,6 +46,7 @@ INSTALLED_APPS = [
     'livestock',
     'finance',
     'weather',
+    'notifications',
     'admin_panel',
     
 ]

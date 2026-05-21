@@ -1,7 +1,7 @@
 from django.contrib import admin
 from .models import (
     Crop, CropRecommendationHistory, FertilizerRecord, PesticideRecord,
-    CropExpense, CropIncome, HarvestRecord, CropKnowledgeBase, Labour
+    CropExpense, CropIncome, HarvestRecord, CropKnowledgeBase, Labour,CropTypeConfig, CropActivityRule,
 )
 
 
@@ -83,3 +83,66 @@ class CropRecommendationHistoryAdmin(admin.ModelAdmin):
     list_filter = ['season', 'region', 'created_at']
     search_fields = ['farmer__username']
     readonly_fields = ['recommendations']  # Make JSON field read-only
+    
+    
+@admin.register(CropTypeConfig)
+class CropTypeConfigAdmin(admin.ModelAdmin):
+    list_display = ['get_display_name', 'crop_name', 'variety', 'region', 'season', 'total_growing_days', 'is_active']
+    list_filter = ['crop_name', 'region', 'season', 'is_active']
+    search_fields = ['crop_name', 'variety']
+    list_editable = ['is_active']
+    
+    fieldsets = (
+        ('Identification', {
+            'fields': ('crop_name', 'variety', 'region', 'season')
+        }),
+        ('Germination Stage', {
+            'fields': (('germination_start_day', 'germination_end_day'),)
+        }),
+        ('Vegetative Stage', {
+            'fields': (('vegetative_start_day', 'vegetative_end_day'),)
+        }),
+        ('Flowering Stage', {
+            'fields': (('flowering_start_day', 'flowering_end_day'),)
+        }),
+        ('Maturation Stage', {
+            'fields': (('maturation_start_day', 'maturation_end_day'),)
+        }),
+        ('Harvest Stage', {
+            'fields': (('harvest_start_day', 'harvest_end_day'),)
+        }),
+        ('Other', {
+            'fields': ('total_growing_days', 'is_active')
+        })
+    )
+    
+    def get_display_name(self, obj):
+        return obj.get_display_name()
+    get_display_name.short_description = 'Configuration'
+
+
+@admin.register(CropActivityRule)
+class CropActivityRuleAdmin(admin.ModelAdmin):
+    list_display = ['title', 'crop_config', 'growth_stage', 'day_offset', 'order', 'is_active']
+    list_filter = ['crop_config__crop_name', 'growth_stage', 'is_active']
+    search_fields = ['title', 'description']
+    list_editable = ['is_active', 'order']
+    
+    fieldsets = (
+        ('Configuration', {
+            'fields': ('crop_config', 'growth_stage')
+        }),
+        ('Activity Details', {
+            'fields': ('title', 'title_np', 'description', 'description_np')
+        }),
+        ('Optional Information', {
+            'fields': ('measurements', 'target_pest', 'recommendations'),
+            'classes': ('collapse',)
+        }),
+        ('Timing & Order', {
+            'fields': ('day_offset', 'order')
+        }),
+        ('Status', {
+            'fields': ('is_active',)
+        })
+    )

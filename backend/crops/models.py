@@ -107,6 +107,70 @@ class Crop(models.Model):
     def __str__(self):
         return f"{self.name} - {self.field_name}"
 
+    def calculate_growth_stage(self):
+        """Auto-calculate the growth stage based on the planting date and crop configurations"""
+        if not self.planting_date:
+            return 'seeding'
+            
+        from crops.services.config_matcher import CropConfigMatcher
+        from datetime import date, datetime
+        
+        planting_date = self.planting_date
+        if isinstance(planting_date, str):
+            try:
+                planting_date = datetime.strptime(planting_date, '%Y-%m-%d').date()
+            except ValueError:
+                return 'seeding'
+        
+        # Get farmer's region
+        farmer_region = self.farmer.geographical_region if hasattr(self.farmer, 'geographical_region') else None
+        
+        # Find matching config
+        config, match_strategy = CropConfigMatcher.find_best_match(
+            crop_name=self.name,
+            variety=self.variety if self.variety else None,
+            region=farmer_region,
+            planting_date=planting_date
+        )
+        
+        if not config:
+            return self.growth_stage
+            
+        days_since = (date.today() - planting_date).days
+        if days_since < 0:
+            days_since = 0
+            
+        stage_name = config.get_stage_name(days_since)
+        
+        # Map CropTypeConfig stage name to Crop growth stage choice
+        mapping = {
+            'germination': 'seeding',
+            'seeding': 'seeding',
+            'vegetative': 'vegetative',
+            'flowering': 'flowering',
+            'maturation': 'fruiting',
+            'fruiting': 'fruiting',
+            'harvest': 'harvest',
+            'completed': 'harvest',
+        }
+        
+        return mapping.get(stage_name, 'seeding')
+
+    def update_growth_stage(self, save=True):
+        """Calculate and update the growth stage of the crop"""
+        new_stage = self.calculate_growth_stage()
+        if self.growth_stage != new_stage:
+            self.growth_stage = new_stage
+            if save:
+                self.save(update_fields=['growth_stage'])
+        return new_stage
+
+    def save(self, *args, **kwargs):
+        # Auto-calculate growth stage before saving
+        if not kwargs.get('update_fields') or 'growth_stage' in kwargs.get('update_fields'):
+            self.growth_stage = self.calculate_growth_stage()
+        super().save(*args, **kwargs)
+
     class Meta:
         ordering = ['-created_at']
     
@@ -425,4 +489,215 @@ class CropRecommendationHistory(models.Model):
     
     def __str__(self):
         return f"{self.farmer.username} - {self.created_at.date()}"
+    
+    
+class CropTypeConfig(models.Model):
+
+    REGION_CHOICES = [
+        ('terai', 'Terai'),
+        ('hilly', 'Hilly'),
+        ('himalayan', 'Himalayan'),
+    ]
+    
+    SEASON_CHOICES = [
+        ('spring', 'Spring (Feb-Apr)'),
+        ('summer', 'Summer (May-Jul)'),
+        ('monsoon', 'Monsoon (Jun-Sep)'),
+        ('autumn', 'Autumn (Sep-Nov)'),
+        ('winter', 'Winter (Dec-Feb)'),
+    ]
+
+    # Identification fields
+    crop_name = models.CharField(max_length=100)
+    region = models.CharField(max_length=50, choices=REGION_CHOICES)
+    variety = models.CharField(
+        max_length=100,
+        blank=True,
+        help_text="Optional variety name"
+    )
+    
+    season = models.CharField(
+        max_length=20, 
+        choices=SEASON_CHOICES, 
+        blank=True, null=True, 
+        help_text="Growing season"
+        )
+
+
+    # Stage 1: Germination
+    germination_start_day = models.IntegerField(default=0)
+    germination_end_day = models.IntegerField(default=10)
+
+    # Stage 2: Vegetative
+    vegetative_start_day = models.IntegerField(default=11)
+    vegetative_end_day = models.IntegerField(default=40)
+
+    # Stage 3: Flowering/Reproductive
+    flowering_start_day = models.IntegerField(default=41)
+    flowering_end_day = models.IntegerField(default=60)
+
+    # Stage 4: Maturation/Fruiting
+    maturation_start_day = models.IntegerField(default=61)
+    maturation_end_day = models.IntegerField(default=85)
+
+    # Stage 5: Harvest
+    harvest_start_day = models.IntegerField(default=86)
+    harvest_end_day = models.IntegerField(default=120)
+
+    total_growing_days = models.IntegerField(default=120)
+    is_active = models.BooleanField(default=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+    
+    
+    class Meta:
+        ordering = ['crop_name', 'region', 'variety', 'season']
+        indexes = [
+            models.Index(fields=['crop_name', 'region', 'variety', 'season']),
+            models.Index(fields=['crop_name', 'is_active']),
+        ]
+        constraints = [
+            models.UniqueConstraint(
+                fields=['crop_name', 'variety', 'region', 'season'],
+                name='unique_crop_config'
+            )
+        ]
+       
+
+    def __str__(self):
+       return self.get_display_name()
+   
+    def get_display_name(self):
+        """Generate human-readable display name"""
+        
+        parts = [self.crop_name]
+        if self.variety:
+            parts.append(f"({self.variety})")
+        
+        if self.region:
+            parts.append(f"- {self.get_region_display()}") 
+        
+        if self.season:
+            parts.append(f"[{self.get_season_display()}]") 
+            
+        return " ".join(parts)    
+    
+    def get_region_display(self):
+        region_names = {
+            'terai': 'Terai',
+            'hilly': 'Hilly',
+            'himalayan': 'Himalayan',
+        }
+        return region_names.get(self.region, self.region or 'Any')
+    
+    def get_season_display(self):
+        season_names = {
+            'spring': 'Spring',
+            'summer': 'Summer',
+            'monsoon': 'Monsoon',
+            'autumn': 'Autumn',
+            'winter': 'Winter',
+        }
+        return season_names.get(self.season, self.season or 'Any')
+
+    def get_stage_name(self, days_after_planting):
+        if days_after_planting <= self.germination_end_day:
+            return 'germination'
+        elif days_after_planting <= self.vegetative_end_day:
+            return 'vegetative'
+        elif days_after_planting <= self.flowering_end_day:
+            return 'flowering'
+        elif days_after_planting <= self.maturation_end_day:
+            return 'maturation'
+        elif days_after_planting <= self.harvest_end_day:
+            return 'harvest'
+        return 'completed'
+
+    def get_stage_display_name(self, days_after_planting):
+        stage = self.get_stage_name(days_after_planting)
+        return {
+            'germination': 'Germination',
+            'vegetative': 'Vegetative',
+            'flowering': 'Flowering',
+            'maturation': 'Maturation',
+            'harvest': 'Harvest',
+            'completed': 'Completed'
+        }.get(stage, 'Unknown')
+        
+    def get_stage_start_day(self, stage_name):
+        """Get start day for a given stage"""
+        stage_starts = {
+            'germination': self.germination_start_day,
+            'vegetative': self.vegetative_start_day,
+            'flowering': self.flowering_start_day,
+            'maturation': self.maturation_start_day,
+            'harvest': self.harvest_start_day,
+        }
+        return stage_starts.get(stage_name, 0)
+        
+        
+class CropActivityRule(models.Model):
+    STAGE_CHOICE = [
+        ('germination', 'Germination'),
+        ('vegetative', 'Vegetative'),
+        ('flowering', 'Flowering'),
+        ('maturation', 'Maturation'),
+        ('harvest', 'Harvest'),
+    ]  
+    
+    crop_config = models.ForeignKey(
+        CropTypeConfig,
+        on_delete=models.CASCADE,
+        related_name='activities'
+    )
+    
+    growth_stage = models.CharField(max_length=20, choices=STAGE_CHOICE)
+    
+    title = models.CharField(max_length=200)
+    title_np = models.CharField(max_length=200, blank=True)
+    description = models.TextField()
+    description_np = models.TextField(blank=True)
+    
+    
+    # Optional details
+    measurements = models.TextField(blank=True, help_text="e.g., Urea: 4.8 Kg/Ropani")
+    target_pest = models.TextField(blank=True, help_text="e.g., Blast, Bacterial leaf blight")
+    recommendations = models.TextField(blank=True, help_text="Additional tips for farmers")
+    
+    # Timing: 0 = any day in stage, or specific day like 10
+    day_offset = models.IntegerField(
+        default=0,
+        help_text="0 = any day in this stage, or specific day number (e.g., 10 = exactly on day 10 of the stage)"
+    )
+    
+    order = models.IntegerField(default=0, help_text = "Lower number = shown first")
+    
+    #status
+    is_active = models.BooleanField(default=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+    
+    
+    class Meta:
+        ordering = ['crop_config', 'growth_stage', 'order', 'day_offset']
+        indexes = [
+            models.Index(fields=['crop_config', 'growth_stage', 'is_active']),
+            models.Index(fields=['growth_stage', 'is_active']),
+        ]
+        unique_together = ['crop_config', 'growth_stage', 'title']
+        
+    def __str__(self):
+        return f"{self.crop_config.crop_name} - {self.get_growth_stage_display()}: {self.title}" 
+    
+    def get_growth_stage_display(self):
+        stage_icons = {
+            'germination': '🌱',
+            'vegetative': '🌿',
+            'flowering': '🌸',
+            'maturation': '🍎',
+            'harvest': '✂️',
+        }
+        icon = stage_icons.get(self.growth_stage, '📋')
+        name = self.growth_stage.capitalize()
+        return f"{icon} {name}"     
     

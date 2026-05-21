@@ -5,6 +5,13 @@ from . import views
 urlpatterns = [
     # Main Crop URLs
     path('', views.CropListCreateView.as_view(), name='crop-list'),
+
+    # Reminder endpoints (before <uuid:pk>/ catch-all detail routes)
+    path('reminders/generate/', views.GenerateCropRemindersView.as_view(), name='generate-reminders'),
+    path('reminders/pending/', views.PendingCropActivitiesView.as_view(), name='pending-activities'),
+    path('reminders/stats/', views.CropReminderStatsView.as_view(), name='reminder-stats'),
+    path('reminders/<int:notification_id>/read/', views.MarkCropActivityReadView.as_view(), name='mark-activity-read'),
+
     path('<uuid:pk>/', views.CropDetailView.as_view(), name='crop-detail'), 
     
     # Fertilizer URLs
@@ -42,4 +49,21 @@ urlpatterns = [
    path('recommend/', views.CropRecommendationView.as_view(), name='crop-recommend'),
     path('recommend/history/', views.CropRecommendationHistoryView.as_view(), name='recommend-history'),
     path('recommend/history/<int:history_id>/', views.CropRecommendationHistoryView.as_view(), name='recommend-history-detail'),
+    
+    path('api/crop-configs/', views.CropTypeConfigListView.as_view(), name='crop-config-list'),
+    path('api/crop-configs/<int:id>/', views.CropTypeConfigDetailView.as_view(), name='crop-config-detail'),
+    
+    # Crop Knowledge Base URLs
+    path('api/knowledge-base/', views.CropKnowledgeBaseListView.as_view(), name='crop-knowledge-base-list'),
+    path('api/knowledge-base/<int:pk>/', views.CropKnowledgeBaseDetailView.as_view(), name='crop-knowledge-base-detail'),
+    
+    # Crop Activity Rule URLs
+    path('api/crop-activity-rules/', views.CropActivityRuleViewSet.as_view({'get': 'list', 'post': 'create'}), name='crop-activity-rule-list'),
+    path('api/crop-activity-rules/<int:id>/', views.CropActivityRuleViewSet.as_view({'get': 'retrieve', 'put': 'update', 'patch': 'partial_update', 'delete': 'destroy'}), name='crop-activity-rule-detail'),
+    
+    # Crop options endpoints
+    path('api/crop-config-options/', views.CropConfigOptionsView.as_view(), name='crop-config-options'),
+    path('api/available-crops/', views.AvailableCropsView.as_view(), name='available-crops'),
+
+    path('<uuid:crop_id>/reminders/generate/', views.CropRemindersByCropView.as_view(), name='crop-reminders'),
 ]

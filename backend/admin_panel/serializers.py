@@ -4,7 +4,7 @@ from django.db.models import Sum, Count
 from django.utils import timezone
 from datetime import date, datetime, timedelta
 from crops.models import Crop, CropKnowledgeBase
-from livestock.models import Animal, AnimalType
+from livestock.models import Animal, AnimalType, BreedingRecord
 from finance.models import Transaction
 from .models import Notification, SystemSetting, AdminLog, Report
 
@@ -316,7 +316,7 @@ class BreedingRecordAdminSerializer(serializers.ModelSerializer):
     farmer_name = serializers.CharField(source='animal.farmer.get_full_name', read_only=True)
     
     class Meta:
-        model = Animal
+        model = BreedingRecord
         fields = '__all__'
 
 
