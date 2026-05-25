@@ -24,9 +24,9 @@ class Explanation:
             "crop_name": self.crop_name,
             "summary": self.summary,
             "confidence": round(self.confidence * 100, 1),
-            "strengths": self.strengths,
-            "weaknesses": self.weaknesses,
-            "actionable_advice": self.actionable_advice,
+            "strengths": self.strengths[:5],  # Limit to 5 strengths
+            "weaknesses": self.weaknesses[:5],  # Limit to 5 weaknesses
+            "actionable_advice": self.actionable_advice[:5],
             "npk_status": self.npk_status
         }
     
@@ -40,13 +40,16 @@ class Explanation:
         ]
         
         # Add NPK status if available
-        if self.npk_status and self.npk_status.get('nitrogen'):
+        if self.npk_status and isinstance(self.npk_status, dict):
             lines.append("\n📊 NPK ANALYSIS:")
             for nutrient in ['nitrogen', 'phosphorus', 'potassium']:
                 if nutrient in self.npk_status:
                     status = self.npk_status[nutrient]
-                    if status.get('message'):
-                        lines.append(f"   • {status['message']}")
+                    if isinstance(status, dict):
+                        message = status.get('message', f"{nutrient.capitalize()}: {status.get('status', 'Unknown')}")
+                        lines.append(f"   • {message}")
+                    elif isinstance(status, str):
+                        lines.append(f"   • {nutrient.capitalize()}: {status}")
         
         if self.strengths:
             lines.append("\n✅ STRENGTHS:")
@@ -84,18 +87,32 @@ class ExplanationFacility:
     ) -> Explanation:
         """Generate explanation for a crop recommendation"""
         
-        if npk_status is None:
-            npk_status = {}
+        # FIX: Ensure npk_status has proper structure
+        if npk_status is None or not isinstance(npk_status, dict):
+            npk_status = {
+                "nitrogen": {"status": "Unknown", "message": "No soil test data available", "suggestion": "Conduct soil test for accurate recommendations", "score": 0},
+                "phosphorus": {"status": "Unknown", "message": "No soil test data available", "suggestion": "Conduct soil test for accurate recommendations", "score": 0},
+                "potassium": {"status": "Unknown", "message": "No soil test data available", "suggestion": "Conduct soil test for accurate recommendations", "score": 0},
+                "total_score": 0
+            }
         
-        # Ensure npk_status has proper structure
-        if not isinstance(npk_status, dict):
-            npk_status = {}
-        
+        # Ensure all nutrients are present as dicts
         for nutrient in ['nitrogen', 'phosphorus', 'potassium']:
             if nutrient not in npk_status:
-                npk_status[nutrient] = {'status': 'unknown', 'message': '', 'score': 0}
+                npk_status[nutrient] = {
+                    'status': 'Unknown', 
+                    'message': f'{nutrient.capitalize()} data not provided',
+                    'suggestion': 'Conduct soil test',
+                    'score': 0
+                }
             elif not isinstance(npk_status[nutrient], dict):
-                npk_status[nutrient] = {'status': 'unknown', 'message': str(npk_status[nutrient]), 'score': 0}
+                # Convert legacy format
+                npk_status[nutrient] = {
+                    'status': 'Unknown',
+                    'message': str(npk_status[nutrient]),
+                    'suggestion': 'Conduct soil test',
+                    'score': 0
+                }
         
         exp = Explanation(
             crop_name=crop_name,
@@ -128,7 +145,8 @@ class ExplanationFacility:
                     if mitigation:
                         exp.mitigations.append(mitigation)
         
-        # Add NPK-based strengths/weaknesses
+        # Add NPK-based strengths/weaknesses (limit to most critical)
+        critical_npk = []
         for nutrient, status in npk_status.items():
             if nutrient != "total_score" and isinstance(status, dict):
                 status_value = status.get('status', '')
@@ -142,15 +160,38 @@ class ExplanationFacility:
                         "reason": status.get('message', f"{nutrient.capitalize()} level is adequate"),
                         "confidence": 0.7
                     })
+                elif "Very Low" in status_value or "Zero" in status_value or "Very High" in status_value:
+                    critical_npk.append({
+                        "reason": status.get('message', f"{nutrient.capitalize()} level is {status_value}"),
+                        "mitigation": self._get_npk_mitigation(nutrient),
+                        "severity": "high"
+                    })
                 elif "Low" in status_value or "High" in status_value:
                     exp.weaknesses.append({
                         "reason": status.get('message', f"{nutrient.capitalize()} level is {status_value}"),
                         "mitigation": self._get_npk_mitigation(nutrient)
                     })
         
-        # Generate summary based on confidence
-        if confidence >= 0.80:
+        # Add critical NPK issues first
+        for critical in critical_npk:
+            exp.weaknesses.insert(0, {
+                "reason": critical["reason"],
+                "mitigation": critical["mitigation"]
+            })
+        
+        # Remove duplicate strengths and weaknesses
+        exp.strengths = self._deduplicate_list(exp.strengths, 'reason')
+        exp.weaknesses = self._deduplicate_list(exp.weaknesses, 'reason')
+        
+        # Filter contradictions
+        exp.strengths, exp.weaknesses = self._filter_contradictions(exp.strengths, exp.weaknesses)
+        
+        # Generate summary based on confidence and critical issues
+        has_critical = len(critical_npk) > 0
+        if confidence >= 0.80 and not has_critical:
             exp.summary = f"Strongly recommended. {crop_name} is well-suited to your farm conditions."
+        elif confidence >= 0.80 and has_critical:
+            exp.summary = f"Highly suitable but requires attention to nutrient management."
         elif confidence >= 0.60:
             exp.summary = f"Good choice. {crop_name} should perform well with standard management."
         elif confidence >= 0.50:
@@ -162,6 +203,37 @@ class ExplanationFacility:
         exp.actionable_advice = self._generate_advice(exp.weaknesses, npk_status)
         
         return exp
+    
+    def _deduplicate_list(self, items: List[Dict], key: str) -> List[Dict]:
+        """Remove duplicate items based on a key"""
+        seen = set()
+        unique_items = []
+        for item in items:
+            item_key = item.get(key, '')
+            if item_key and item_key not in seen:
+                seen.add(item_key)
+                unique_items.append(item)
+        return unique_items
+    
+    def _filter_contradictions(self, strengths: List[Dict], weaknesses: List[Dict]) -> tuple:
+        """Remove contradictory strengths and weaknesses"""
+        # Extract strength reasons
+        strength_reasons = {s.get('reason', '') for s in strengths}
+        
+        # Filter weaknesses that contradict strengths
+        filtered_weaknesses = []
+        for w in weaknesses:
+            reason = w.get('reason', '')
+            # If there's a strength with similar meaning, skip the weakness
+            is_contradiction = False
+            for s_reason in strength_reasons:
+                if 'perfect' in s_reason.lower() and ('low' in reason.lower() or 'high' in reason.lower()):
+                    is_contradiction = True
+                    break
+            if not is_contradiction:
+                filtered_weaknesses.append(w)
+        
+        return strengths, filtered_weaknesses
     
     def _get_rule_explanation(self, rule_id: str) -> str:
         explanations = {
@@ -208,29 +280,59 @@ class ExplanationFacility:
         return mitigations.get(nutrient, "Consider soil testing and balanced fertilization")
     
     def _generate_advice(self, weaknesses: List[Dict], npk_status: Dict = None) -> List[str]:
-        advice = []
-        for w in weaknesses:
-            if w.get('mitigation'):
-                advice.append(w['mitigation'])
+        """Generate prioritized, non-contradictory advice"""
+        critical_advice = []
+        warning_advice = []
+        info_advice = []
         
-        # Add NPK-specific advice
-        if npk_status:
+        # Categorize advice from weaknesses
+        for w in weaknesses:
+            mitigation = w.get('mitigation', '')
+            reason = w.get('reason', '')
+            
+            if mitigation:
+                if 'STOP' in mitigation or 'Critical' in reason or 'too high' in reason.lower() or 'too low' in reason.lower():
+                    critical_advice.append(mitigation)
+                elif 'Apply' in mitigation or 'add' in mitigation.lower():
+                    warning_advice.append(mitigation)
+                else:
+                    info_advice.append(mitigation)
+        
+        # Add NPK-specific advice - prioritize by severity
+        if npk_status and isinstance(npk_status, dict):
             for nutrient, status in npk_status.items():
                 if nutrient != "total_score" and isinstance(status, dict):
                     status_value = status.get('status', '')
-                    if "Very Low" in status_value:
-                        advice.append(self._get_npk_mitigation(nutrient))
-                    elif "Low" in status_value:
-                        advice.append(self._get_npk_mitigation(nutrient))
-                    elif "Very High" in status_value:
-                        advice.append(f"STOP adding {nutrient} fertilizer immediately")
+                    suggestion = status.get('suggestion', '')
+                    
+                    if "Very High" in status_value:
+                        # Add STOP advice first
+                        critical_advice.insert(0, suggestion)
+                    elif "Very Low" in status_value or "Zero" in status_value:
+                        critical_advice.append(suggestion)
+                    elif "Low" in status_value or "High" in status_value:
+                        warning_advice.append(suggestion)
+        
+        # Combine advice with priority order (critical first, then warnings, then info)
+        advice = []
+        advice.extend(critical_advice[:2])   # Max 2 critical
+        advice.extend(warning_advice[:2])    # Max 2 warnings
+        advice.extend(info_advice[:1])       # Max 1 info
         
         # Remove duplicates while preserving order
         seen = set()
         unique_advice = []
         for a in advice:
-            if a not in seen:
+            if a and a not in seen:
                 seen.add(a)
                 unique_advice.append(a)
         
-        return unique_advice[:5]
+        # Remove contradictory advice (e.g., both "add" and "stop adding")
+        final_advice = []
+        has_stop = any('STOP' in a for a in unique_advice)
+        for a in unique_advice:
+            if has_stop and 'Apply' in a and 'STOP' not in a:
+                continue  # Skip "Apply" if we have "STOP"
+            final_advice.append(a)
+        
+        return final_advice[:5]

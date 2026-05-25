@@ -292,52 +292,117 @@ class HarvestRecordCreateSerializer(serializers.ModelSerializer):
             raise serializers.ValidationError("Quantity must be greater than 0")
         return value
     
-    
-        
-from rest_framework import serializers
-from .models import CropKnowledgeBase, CropRecommendationHistory
-import re
-
-
 class CropKnowledgeBaseSerializer(serializers.ModelSerializer):
-    """Serializer for the crop knowledge base – matches final engine fields"""
+    """Serializer for the crop knowledge base – matches expert system requirements exactly"""
     
-    # Display choices
+    # Display choices for better UI
     category_display = serializers.CharField(source='get_category_display', read_only=True)
     best_season_display = serializers.CharField(source='get_best_season_display', read_only=True)
     water_req_display = serializers.CharField(source='get_water_req_display', read_only=True)
     drought_tolerance_display = serializers.CharField(source='get_drought_tolerance_display', read_only=True)
     labor_req_display = serializers.CharField(source='get_labor_req_display', read_only=True)
     storage_life_display = serializers.CharField(source='get_storage_life_display', read_only=True)
+    frost_sensitive_display = serializers.CharField(source='get_frost_sensitive_display', read_only=True)
     
-    # Helper lists (properties on model)
-    all_seasons = serializers.ListField(read_only=True)
-    regions_suitable = serializers.ListField(read_only=True)
-    acceptable_soils = serializers.ListField(read_only=True)
+    # Helper lists (parsed from comma-separated strings)
+    all_seasons = serializers.SerializerMethodField()
+    regions_suitable = serializers.SerializerMethodField()
+    acceptable_soils = serializers.SerializerMethodField()
+    other_seasons_list = serializers.SerializerMethodField()
     
-    # NPK level fields
+    # NPK level fields for UI display
     n_need_level = serializers.SerializerMethodField()
     p_need_level = serializers.SerializerMethodField()
     k_need_level = serializers.SerializerMethodField()
+    
+    # Calculated ranges for expert system display
+    n_need_min_display = serializers.SerializerMethodField()
+    n_need_max_display = serializers.SerializerMethodField()
+    p_need_min_display = serializers.SerializerMethodField()
+    p_need_max_display = serializers.SerializerMethodField()
+    k_need_min_display = serializers.SerializerMethodField()
+    k_need_max_display = serializers.SerializerMethodField()
 
     class Meta:
         model = CropKnowledgeBase
         fields = [
+            # Basic Info
             'id', 'name_en', 'name_np', 'category', 'category_display',
-            'best_season', 'best_season_display', 'other_seasons', 'all_seasons',
+            
+            # Season
+            'best_season', 'best_season_display', 'other_seasons', 'other_seasons_list', 'all_seasons',
+            
+            # Temperature
             'temp_min', 'temp_max', 'temp_ideal',
+            
+            # Soil - USE soil_other, NOT soil_acceptable
             'soil_ideal', 'soil_other', 'acceptable_soils',
+            
+            # pH
             'ph_min', 'ph_max', 'ph_ideal',
-            'water_req', 'water_req_display',
+            
+            # Water
+            'water_req', 'water_req_display', 'water_logging_tolerance',
+            
+            # Region
             'region_suitable', 'regions_suitable',
+            
+            # Tolerances
             'drought_tolerance', 'drought_tolerance_display',
-            'frost_sensitive',
+            'frost_sensitive', 'frost_sensitive_display',
+            
+            # Labor & Storage
             'labor_req', 'labor_req_display',
             'storage_life', 'storage_life_display',
+            
+            # NPK - Single values
             'n_need', 'p_need', 'k_need',
+            
+            # NPK Display Levels
             'n_need_level', 'p_need_level', 'k_need_level',
+            
+            # NPK Calculated Ranges
+            'n_need_min_display', 'n_need_max_display',
+            'p_need_min_display', 'p_need_max_display',
+            'k_need_min_display', 'k_need_max_display',
+            
+            # Growth
+            'growing_days', 'altitude_min', 'altitude_max',
+            
+            # Day length
+            'day_length_sensitive', 'day_length_type',
         ]
-        read_only_fields = ['id']
+        read_only_fields = ['id', 'created_at', 'updated_at']
+    
+    # ========== HELPER METHODS ==========
+    
+    def get_all_seasons(self, obj):
+        """Get list of all seasons this crop can grow in"""
+        seasons = [obj.best_season]
+        if obj.other_seasons:
+            other = [s.strip() for s in obj.other_seasons.split(',') if s.strip()]
+            seasons.extend(other)
+        return list(set(seasons))
+    
+    def get_other_seasons_list(self, obj):
+        """Get other seasons as list"""
+        if obj.other_seasons:
+            return [s.strip() for s in obj.other_seasons.split(',') if s.strip()]
+        return []
+    
+    def get_regions_suitable(self, obj):
+        """Get suitable regions as list"""
+        if obj.region_suitable:
+            return [r.strip().lower() for r in obj.region_suitable.split(',') if r.strip()]
+        return []
+    
+    def get_acceptable_soils(self, obj):
+        """Get acceptable soils as list - uses soil_other field"""
+        if obj.soil_other:
+            return [s.strip() for s in obj.soil_other.split(',') if s.strip()]
+        return []
+    
+    # ========== NPK LEVEL METHODS ==========
     
     def get_n_need_level(self, obj):
         if obj.n_need <= 40:
@@ -363,137 +428,140 @@ class CropKnowledgeBaseSerializer(serializers.ModelSerializer):
         else:
             return 'high'
     
-    def validate_name_en(self, value):
-        """Validate English name"""
-        if not value or not value.strip():
-            raise serializers.ValidationError("English name is required")
-        if len(value) > 100:
-            raise serializers.ValidationError("English name cannot exceed 100 characters")
-        return value.strip()
+    # ========== NPK RANGE METHODS ==========
     
-    def validate_temp_min(self, value):
-        """Validate minimum temperature"""
-        if value is None:
-            raise serializers.ValidationError("Minimum temperature is required")
-        if value < -20 or value > 50:
-            raise serializers.ValidationError("Temperature must be between -20°C and 50°C")
-        return value
+    def get_n_need_min_display(self, obj):
+        return max(20, obj.n_need * 0.6)
     
-    def validate_temp_max(self, value):
-        """Validate maximum temperature"""
-        if value is None:
-            raise serializers.ValidationError("Maximum temperature is required")
-        if value < -20 or value > 50:
-            raise serializers.ValidationError("Temperature must be between -20°C and 50°C")
-        return value
+    def get_n_need_max_display(self, obj):
+        return obj.n_need * 1.4
     
-    def validate(self, data):
-        """Cross-field validations"""
-        # Check temp_min <= temp_max
-        if 'temp_min' in data and 'temp_max' in data:
-            if data['temp_min'] > data['temp_max']:
-                raise serializers.ValidationError({
-                    'temp_min': "Minimum temperature cannot be greater than maximum temperature"
-                })
-        
-        # Check ph_min <= ph_max
-        if 'ph_min' in data and 'ph_max' in data:
-            if data['ph_min'] > data['ph_max']:
-                raise serializers.ValidationError({
-                    'ph_min': "Minimum pH cannot be greater than maximum pH"
-                })
-        
-        # Check ph_ideal is within range
-        if 'ph_ideal' in data and 'ph_min' in data and 'ph_max' in data:
-            if not (data['ph_min'] <= data['ph_ideal'] <= data['ph_max']):
-                raise serializers.ValidationError({
-                    'ph_ideal': f"Ideal pH must be between {data['ph_min']} and {data['ph_max']}"
-                })
-        
-        return data
+    def get_p_need_min_display(self, obj):
+        return max(10, obj.p_need * 0.6)
+    
+    def get_p_need_max_display(self, obj):
+        return obj.p_need * 1.4
+    
+    def get_k_need_min_display(self, obj):
+        return max(10, obj.k_need * 0.6)
+    
+    def get_k_need_max_display(self, obj):
+        return obj.k_need * 1.4
+
+
 
 
 class CropRecommendationRequestSerializer(serializers.Serializer):
-    """Serializer for crop recommendation requests with full validation"""
+    """
+    Serializer for crop recommendation requests
+    Matches exactly what expert system expects
+    """
     
-    # Basic fields
+    # ========== REQUIRED FIELDS ==========
+    
     region = serializers.ChoiceField(
         choices=['terai', 'mid-hill', 'hill', 'mountain'],
-        default='terai',
+        required=True,
         error_messages={
+            'required': 'Region is required',
             'invalid_choice': 'Invalid region. Choose from: terai, mid-hill, hill, mountain'
         }
     )
     
     season = serializers.ChoiceField(
-        choices=['spring', 'monsoon', 'autumn', 'winter'],
-        required=False,
-        allow_null=True,
-        help_text="Leave empty to auto-detect current season",
+        choices=['spring', 'summer', 'monsoon', 'autumn', 'winter'],
+        required=True,
         error_messages={
-            'invalid_choice': 'Invalid season. Choose from: spring, monsoon, autumn, winter'
+            'required': 'Season is required',
+            'invalid_choice': 'Invalid season. Choose from: spring, summer, monsoon, autumn, winter'
         }
     )
     
     water_source = serializers.ChoiceField(
-        choices=['rainfed_only', 'seasonal_canal', 'well_borewell', 'drip_irrigation'],
-        default='rainfed_only',
+        choices=['rainfed_only', 'canal', 'well', 'river', 'drip_irrigation'],
+        required=True,
         error_messages={
-            'invalid_choice': 'Invalid water source. Choose from: rainfed_only, seasonal_canal, well_borewell, drip_irrigation'
+            'required': 'Water source is required',
+            'invalid_choice': 'Invalid water source. Choose from: rainfed_only, canal, well, river, drip_irrigation'
         }
     )
     
-    soil_type = serializers.CharField(
-        max_length=50,
-        default='loamy',
+    soil_type = serializers.ChoiceField(
+        choices=['clay', 'loamy', 'sandy', 'silty', 'clay_loam'],
+        required=True,
         error_messages={
-            'max_length': 'Soil type cannot exceed 50 characters'
+            'required': 'Soil type is required',
+            'invalid_choice': 'Invalid soil type. Choose from: clay, loamy, sandy, silty, clay_loam'
         }
     )
     
     labor_availability = serializers.ChoiceField(
         choices=['low', 'medium', 'high'],
-        default='medium',
+        required=True,
         error_messages={
+            'required': 'Labor availability is required',
             'invalid_choice': 'Invalid labor availability. Choose from: low, medium, high'
         }
     )
     
     market_distance = serializers.ChoiceField(
-        choices=['near', 'far'],
-        default='near',
+        choices=['near', 'medium', 'far'],
+        required=True,
         error_messages={
-            'invalid_choice': 'Invalid market distance. Choose from: near, far'
+            'required': 'Market distance is required',
+            'invalid_choice': 'Invalid market distance. Choose from: near, medium, far'
         }
     )
     
     farming_goal = serializers.ChoiceField(
-        choices=['food_security', 'profit', 'mixed'],
-        default='mixed',
+        choices=['profit', 'food_security', 'mixed', 'subsistence'],
+        required=True,
         error_messages={
-            'invalid_choice': 'Invalid farming goal. Choose from: food_security, profit, mixed'
+            'required': 'Farming goal is required',
+            'invalid_choice': 'Invalid farming goal. Choose from: profit, food_security, mixed, subsistence'
         }
     )
     
-    temperature_override = serializers.FloatField(
-        required=False,
-        allow_null=True,
-        help_text="Optional: override automatic temperature based on region/season"
+    # ========== NEW REQUIRED FIELDS ==========
+    
+    temperature = serializers.FloatField(
+        required=True,
+        min_value=-20,
+        max_value=50,
+        error_messages={
+            'required': 'Temperature is required',
+            'min_value': 'Temperature must be between -20°C and 50°C',
+            'max_value': 'Temperature must be between -20°C and 50°C',
+            'invalid': 'Please enter a valid number for temperature'
+        }
     )
     
-    elevation_risk = serializers.BooleanField(
-        required=False,
-        default=None,
-        allow_null=True,
-        help_text="If not provided, auto-derived from region+season"
+    frost_risk = serializers.ChoiceField(
+        choices=['yes', 'no'],
+        required=True,
+        error_messages={
+            'required': 'Frost risk is required',
+            'invalid_choice': 'Invalid choice. Choose from: yes, no'
+        }
     )
     
-    # NPK Fields
+    drought_risk = serializers.ChoiceField(
+        choices=['high', 'medium', 'low'],
+        required=True,
+        help_text="Drought risk level at your farm location",
+        error_messages={
+            'required': 'Drought risk is required',
+            'invalid_choice': 'Invalid choice. Choose from: high, medium, low'
+        }
+    )
+    
+    # ========== OPTIONAL FIELDS (Hidden by default) ==========
+    
     ph = serializers.FloatField(
+        required=False,
+        allow_null=True,
         min_value=0,
         max_value=14,
-        required=False,
-        allow_null=True,
         error_messages={
             'min_value': 'pH must be between 0 and 14',
             'max_value': 'pH must be between 0 and 14',
@@ -502,183 +570,249 @@ class CropRecommendationRequestSerializer(serializers.Serializer):
     )
     
     n = serializers.FloatField(
-        min_value=0,
         required=False,
         allow_null=True,
-        help_text="Nitrogen (kg/ha)",
+        min_value=0,
+        max_value=500,
         error_messages={
             'min_value': 'Nitrogen cannot be negative',
+            'max_value': 'Nitrogen seems too high (>500 kg/ha)',
             'invalid': 'Please enter a valid number for Nitrogen'
         }
     )
     
     p = serializers.FloatField(
-        min_value=0,
         required=False,
         allow_null=True,
-        help_text="Phosphorus (kg/ha)",
+        min_value=0,
+        max_value=300,
         error_messages={
             'min_value': 'Phosphorus cannot be negative',
+            'max_value': 'Phosphorus seems too high (>300 kg/ha)',
             'invalid': 'Please enter a valid number for Phosphorus'
         }
     )
     
     k = serializers.FloatField(
-        min_value=0,
         required=False,
         allow_null=True,
-        help_text="Potassium (kg/ha)",
+        min_value=0,
+        max_value=500,
         error_messages={
             'min_value': 'Potassium cannot be negative',
+            'max_value': 'Potassium seems too high (>500 kg/ha)',
             'invalid': 'Please enter a valid number for Potassium'
         }
     )
     
-    def validate_soil_type(self, value):
-        """Validate soil type"""
-        valid_soils = ['loamy', 'clay', 'sandy', 'silty', 'sandy_loam', 'clay_loam']
-        if value and value.lower() not in valid_soils:
-            raise serializers.ValidationError(
-                f"Invalid soil type. Choose from: {', '.join(valid_soils)}"
-            )
-        return value.lower() if value else value
-    
-    def validate_temperature_override(self, value):
-        """Validate temperature override"""
-        if value is not None:
-            if value < -20 or value > 50:
-                raise serializers.ValidationError(
-                    "Temperature must be between -20°C and 50°C"
-                )
-        return value
-    
-    def validate_ph(self, value):
-        """Validate pH value"""
-        if value is not None:
-            if value < 0 or value > 14:
-                raise serializers.ValidationError("pH must be between 0 and 14")
-            # Warn about extreme pH values
-            if value < 4.5:
-                raise serializers.ValidationError(
-                    "Very acidic soil (pH < 4.5). Most crops will struggle. Consider adding lime."
-                )
-            if value > 8.5:
-                raise serializers.ValidationError(
-                    "Very alkaline soil (pH > 8.5). Most crops will struggle. Consider adding sulfur."
-                )
-        return value
-    
-    def validate_n(self, value):
-        """Validate Nitrogen"""
-        if value is not None:
-            if value < 0:
-                raise serializers.ValidationError("Nitrogen cannot be negative")
-            if value > 500:
-                raise serializers.ValidationError(
-                    "Nitrogen value seems too high (>500 kg/ha). Please verify."
-                )
-        return value
-    
-    def validate_p(self, value):
-        """Validate Phosphorus"""
-        if value is not None:
-            if value < 0:
-                raise serializers.ValidationError("Phosphorus cannot be negative")
-            if value > 300:
-                raise serializers.ValidationError(
-                    "Phosphorus value seems too high (>300 kg/ha). Please verify."
-                )
-        return value
-    
-    def validate_k(self, value):
-        """Validate Potassium"""
-        if value is not None:
-            if value < 0:
-                raise serializers.ValidationError("Potassium cannot be negative")
-            if value > 500:
-                raise serializers.ValidationError(
-                    "Potassium value seems too high (>500 kg/ha). Please verify."
-                )
-        return value
+    # Backward compatibility fields
+    temperature_override = serializers.FloatField(required=False, allow_null=True, write_only=True)
+    elevation_risk = serializers.BooleanField(required=False, allow_null=True, write_only=True)
     
     def validate(self, data):
-        """Cross-field validations with detailed error messages"""
+        """Cross-field validations"""
         errors = {}
         
-        # NPK validation - all or nothing
+        # Convert backward compatibility fields
+        if 'temperature_override' in data and data['temperature_override'] is not None:
+            if 'temperature' not in data or data['temperature'] is None:
+                data['temperature'] = data['temperature_override']
+        
+        if 'elevation_risk' in data and data['elevation_risk'] is not None:
+            if 'frost_risk' not in data or data['frost_risk'] is None:
+                data['frost_risk'] = 'yes' if data['elevation_risk'] else 'no'
+        
+        # NPK validation - all or nothing warning (not error)
         n = data.get('n')
         p = data.get('p')
         k = data.get('k')
         
         npk_provided = [x for x in [n, p, k] if x is not None]
         
-        if npk_provided:
-            if len(npk_provided) != 3:
-                missing = []
-                if n is None:
-                    missing.append('Nitrogen (n)')
-                if p is None:
-                    missing.append('Phosphorus (p)')
-                if k is None:
-                    missing.append('Potassium (k)')
-                
-                errors['npk'] = f"For accurate soil analysis, please provide all three NPK values. Missing: {', '.join(missing)}"
+        if npk_provided and len(npk_provided) != 3:
+            # This is a warning, not an error
+            missing = []
+            if n is None:
+                missing.append('Nitrogen (n)')
+            if p is None:
+                missing.append('Phosphorus (p)')
+            if k is None:
+                missing.append('Potassium (k)')
+            # Add warning to data for frontend
+            data['_npk_warning'] = f"For accurate soil analysis, please provide all three NPK values. Missing: {', '.join(missing)}"
         
-        # Temperature validation with season
-        temp = data.get('temperature_override')
+        # Region and frost risk consistency (warning only)
+        region = data.get('region')
+        frost_risk = data.get('frost_risk')
+        
+        if region == 'terai' and frost_risk == 'yes':
+            data['_frost_warning'] = "Terai region rarely experiences frost. Please verify your input."
+        
+        if region in ['hill', 'mountain'] and frost_risk == 'no':
+            data['_frost_warning'] = f"{region.upper()} region commonly experiences frost. Please verify."
+        
+        # Temperature and season consistency (warning only)
+        temperature = data.get('temperature')
         season = data.get('season')
-        region = data.get('region', 'terai')
         
-        if temp is not None and season:
-            # Check if temperature is realistic for the season
+        if temperature and season:
             season_temp_ranges = {
                 'spring': (5, 35),
+                'summer': (15, 40),
                 'monsoon': (15, 40),
                 'autumn': (5, 30),
                 'winter': (-10, 25)
             }
             min_temp, max_temp = season_temp_ranges.get(season, (-10, 45))
             
-            if temp < min_temp or temp > max_temp:
-                errors['temperature_override'] = (
-                    f"Temperature {temp}°C is unusual for {season} season in {region}. "
+            if temperature < min_temp or temperature > max_temp:
+                data['_temp_warning'] = (
+                    f"Temperature {temperature}°C is unusual for {season} season in {region}. "
                     f"Typical range is {min_temp}°C to {max_temp}°C."
                 )
         
-        # Region and elevation risk consistency
-        elevation_risk = data.get('elevation_risk')
-        region = data.get('region', 'terai')
-        
-        if elevation_risk is True and region == 'terai':
-            errors['elevation_risk'] = (
-                "Frost risk is set to YES, but you selected TERAI region "
-                "which rarely experiences frost. Please verify your inputs."
-            )
-        
-        if elevation_risk is False and region in ['hill', 'mountain']:
-            errors['elevation_risk'] = (
-                f"Frost risk is set to NO, but you selected {region.upper()} region "
-                "which commonly experiences frost. Please verify."
-            )
-        
-        if errors:
-            raise serializers.ValidationError(errors)
-        
         return data
+    
+    def to_representation(self, instance):
+        """Custom representation to include warnings"""
+        representation = super().to_representation(instance)
+        
+        # Add warnings if they exist
+        if hasattr(instance, '_npk_warning'):
+            representation['_npk_warning'] = instance._npk_warning
+        if hasattr(instance, '_frost_warning'):
+            representation['_frost_warning'] = instance._frost_warning
+        if hasattr(instance, '_temp_warning'):
+            representation['_temp_warning'] = instance._temp_warning
+        
+        return representation
 
 
 class CropRecommendationHistorySerializer(serializers.ModelSerializer):
     """Serializer for recommendation history"""
+    
     farmer_name = serializers.CharField(source='farmer.username', read_only=True)
+    
+    # Display values for choices
+    region_display = serializers.SerializerMethodField()
+    season_display = serializers.SerializerMethodField()
+    water_source_display = serializers.SerializerMethodField()
+    soil_type_display = serializers.SerializerMethodField()
+    labor_availability_display = serializers.SerializerMethodField()
+    market_distance_display = serializers.SerializerMethodField()
+    farming_goal_display = serializers.SerializerMethodField()
+    frost_risk_display = serializers.SerializerMethodField()
+    drought_risk_display = serializers.SerializerMethodField()
     
     class Meta:
         model = CropRecommendationHistory
         fields = [
-            'id', 'farmer', 'farmer_name', 'soil_type', 'ph', 'season',
-            'water_availability', 'region', 'temperature', 'frost_risk',
-            'experience', 'goal', 'recommendations', 'created_at'
+            'id', 'farmer', 'farmer_name',
+            'region', 'region_display',
+            'season', 'season_display',
+            'water_source', 'water_source_display',
+            'soil_type', 'soil_type_display',
+            'labor_availability', 'labor_availability_display',
+            'market_distance', 'market_distance_display',
+            'farming_goal', 'farming_goal_display',
+            'temperature', 'frost_risk', 'frost_risk_display',
+            'drought_risk', 'drought_risk_display',
+            'ph', 'n', 'p', 'k',
+            'recommendations', 'created_at'
         ]
         read_only_fields = ['farmer', 'created_at']
+    
+    def get_region_display(self, obj):
+        """Get region display value"""
+        region_map = {
+            'terai': 'Terai',
+            'mid-hill': 'Mid-Hill',
+            'hill': 'Hill',
+            'mountain': 'Mountain'
+        }
+        return region_map.get(obj.region, obj.region)
+    
+    def get_season_display(self, obj):
+        """Get season display value"""
+        season_map = {
+            'spring': 'Spring',
+            'summer': 'Summer',
+            'monsoon': 'Monsoon',
+            'autumn': 'Autumn',
+            'winter': 'Winter'
+        }
+        return season_map.get(obj.season, obj.season)
+    
+    def get_water_source_display(self, obj):
+        """Get water source display value"""
+        water_map = {
+            'rainfed_only': 'Rainfed Only',
+            'canal': 'Canal',
+            'well': 'Well',
+            'river': 'River',
+            'drip_irrigation': 'Drip Irrigation'
+        }
+        return water_map.get(obj.water_source, obj.water_source)
+    
+    def get_soil_type_display(self, obj):
+        """Get soil type display value"""
+        soil_map = {
+            'clay': 'Clay',
+            'loamy': 'Loamy',
+            'sandy': 'Sandy',
+            'silty': 'Silty',
+            'clay_loam': 'Clay Loam'
+        }
+        return soil_map.get(obj.soil_type, obj.soil_type)
+    
+    def get_labor_availability_display(self, obj):
+        """Get labor availability display value"""
+        labor_map = {
+            'low': 'Low',
+            'medium': 'Medium',
+            'high': 'High'
+        }
+        return labor_map.get(obj.labor_availability, obj.labor_availability)
+    
+    def get_market_distance_display(self, obj):
+        """Get market distance display value"""
+        market_map = {
+            'near': 'Near',
+            'medium': 'Medium',
+            'far': 'Far'
+        }
+        return market_map.get(obj.market_distance, obj.market_distance)
+    
+    def get_farming_goal_display(self, obj):
+        """Get farming goal display value"""
+        goal_map = {
+            'profit': 'Profit',
+            'food_security': 'Food Security',
+            'mixed': 'Mixed',
+            'subsistence': 'Subsistence'
+        }
+        return goal_map.get(obj.farming_goal, obj.farming_goal)
+    
+    def get_frost_risk_display(self, obj):
+        """Get frost risk display value"""
+        return 'Yes' if obj.frost_risk else 'No'
+    
+    def get_drought_risk_display(self, obj):
+        """Get drought risk display value"""
+        risk_map = {
+            'high': 'High Risk',
+            'medium': 'Medium Risk',
+            'low': 'Low Risk'
+        }
+        return risk_map.get(obj.drought_risk, obj.drought_risk)
+    
+    def validate_recommendations(self, value):
+        """Validate recommendations JSON structure"""
+        if not isinstance(value, dict):
+            raise serializers.ValidationError("Recommendations must be a JSON object")
+        if 'recommendations' not in value:
+            raise serializers.ValidationError("Recommendations must contain 'recommendations' key")
+        return value
         
 class CropTypeConfigSerializer(serializers.ModelSerializer):
     """Serializer for CropTypeConfig with computed display fields"""

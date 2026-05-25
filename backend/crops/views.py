@@ -1,15 +1,18 @@
-from rest_framework import generics, permissions,viewsets, status
+from rest_framework import generics, permissions, viewsets, status
 from rest_framework.response import Response
 from rest_framework.views import APIView
 from django.shortcuts import get_object_or_404
 from rest_framework.permissions import IsAuthenticated, IsAdminUser
 from rest_framework.decorators import action
 from datetime import date
+
+from admin_panel.models import Notification
 from .services.reminder_service import CropReminderService
 from .expert_system import get_recommendations
 from .models import (
     Crop, CropRecommendationHistory, FertilizerRecord, PesticideRecord, 
-    CropExpense, CropIncome, HarvestRecord, Labour,CropKnowledgeBase, CropTypeConfig, CropActivityRule
+    CropExpense, CropIncome, HarvestRecord, Labour, CropKnowledgeBase, 
+    CropTypeConfig, CropActivityRule
 )
 
 from .serializers import (
@@ -31,7 +34,6 @@ from .serializers import (
     LaborCreateSerializer,
     CropTypeConfigSerializer, 
     CropActivityRuleSerializer
-
 )
 import uuid
 
@@ -411,9 +413,15 @@ class CropLaborView(generics.ListCreateAPIView):
             crop_pk = uuid.UUID(crop_pk)
         crop = get_object_or_404(Crop, id=crop_pk, farmer=self.request.user)
         serializer.save(user=self.request.user, crop=crop)
-        
+
+
+# ====================CROP RECOMMENDATION VIEWS ====================
 
 class CropRecommendationView(APIView):
+    """
+    POST /api/crops/recommend/
+    Get crop recommendations based on farm conditions
+    """
     
     permission_classes = [IsAuthenticated]
 
@@ -427,6 +435,7 @@ class CropRecommendationView(APIView):
 
         farmer_data = serializer.validated_data
 
+        # Get all crops from knowledge base
         crops_qs = CropKnowledgeBase.objects.all()
 
         # Run recommendation engine
@@ -435,31 +444,63 @@ class CropRecommendationView(APIView):
         if not result.get('success'):
             return Response(result, status=status.HTTP_404_NOT_FOUND)
 
+        # Prepare history data with ALL fields
         history_data = {
             'farmer': request.user,
-            'soil_type': farmer_data.get('soil_type', 'loamy'),
-            'ph': farmer_data.get('ph'),
-            'season': farmer_data.get('season'),
-            'water_availability': farmer_data.get('water_source', 'rainfed_only'),
+            # Required fields
             'region': farmer_data.get('region', 'terai'),
-            'temperature': farmer_data.get('temperature_override'),
-            'frost_risk': farmer_data.get('elevation_risk'),
-            'experience': farmer_data.get('labor_availability', 'medium'),  
-            'goal': farmer_data.get('farming_goal', 'mixed'),
+            'season': farmer_data.get('season'),
+            'water_source': farmer_data.get('water_source', 'rainfed_only'),
+            'soil_type': farmer_data.get('soil_type', 'loamy'),
+            'labor_availability': farmer_data.get('labor_availability', 'medium'),
+            'market_distance': farmer_data.get('market_distance', 'near'),
+            'farming_goal': farmer_data.get('farming_goal', 'mixed'),
+            # New required fields
+            'temperature': farmer_data.get('temperature'),
+            'frost_risk': farmer_data.get('frost_risk') == 'yes',
+            'drought_risk': farmer_data.get('drought_risk', 'medium'),
+            # Optional fields
+            'ph': farmer_data.get('ph'),
+            'n': farmer_data.get('n'),
+            'p': farmer_data.get('p'),
+            'k': farmer_data.get('k'),
+            # Results
             'recommendations': result.get('recommendations', [])
         }
+        
+        # Create history entry
         CropRecommendationHistory.objects.create(**history_data)
 
-        return Response(result, status=status.HTTP_200_OK)
+        # Add warning messages to response if any
+        response_data = result
+        if hasattr(serializer, '_npk_warning'):
+            response_data['npk_warning'] = serializer._npk_warning
+        if hasattr(serializer, '_frost_warning'):
+            response_data['frost_warning'] = serializer._frost_warning
+        if hasattr(serializer, '_temp_warning'):
+            response_data['temp_warning'] = serializer._temp_warning
+
+        return Response(response_data, status=status.HTTP_200_OK)
 
 
 class CropRecommendationHistoryView(APIView):
+    """
+    GET /api/crops/recommend/history/
+    Get user's recommendation history
+    
+    DELETE /api/crops/recommend/history/{id}/
+    Delete a specific history entry
+    """
     
     permission_classes = [IsAuthenticated]
 
     def get(self, request):
-        history = CropRecommendationHistory.objects.filter(farmer=request.user).order_by('-created_at')[:20]
+        history = CropRecommendationHistory.objects.filter(
+            farmer=request.user
+        ).order_by('-created_at')[:20]
+        
         serializer = CropRecommendationHistorySerializer(history, many=True)
+        
         return Response({
             'success': True,
             'count': len(history),
@@ -474,7 +515,10 @@ class CropRecommendationHistoryView(APIView):
             }, status=status.HTTP_400_BAD_REQUEST)
 
         try:
-            history = CropRecommendationHistory.objects.get(id=history_id, farmer=request.user)
+            history = CropRecommendationHistory.objects.get(
+                id=history_id, 
+                farmer=request.user
+            )
             history.delete()
             return Response({
                 'success': True,
@@ -485,9 +529,7 @@ class CropRecommendationHistoryView(APIView):
                 'success': False,
                 'error': 'History entry not found'
             }, status=status.HTTP_404_NOT_FOUND)
-            
-            
-            
+
 
 # ==================== CROP TYPE CONFIG VIEWS ====================
 
@@ -595,8 +637,8 @@ class CropActivityRuleViewSet(viewsets.ModelViewSet):
 
 class CropKnowledgeBaseListView(generics.ListCreateAPIView):
     """
-    GET /api/crops/api/knowledge-base/ - List knowledge base entries
-    POST /api/crops/api/knowledge-base/ - Create a knowledge base entry (Admin only)
+    GET /api/crops/knowledge-base/ - List knowledge base entries
+    POST /api/crops/knowledge-base/ - Create a knowledge base entry (Admin only)
     """
     queryset = CropKnowledgeBase.objects.all()
     serializer_class = CropKnowledgeBaseSerializer
@@ -626,14 +668,22 @@ class CropKnowledgeBaseListView(generics.ListCreateAPIView):
         if season:
             queryset = queryset.filter(best_season=season)
             
+        drought_tolerance = self.request.query_params.get('drought_tolerance')
+        if drought_tolerance:
+            queryset = queryset.filter(drought_tolerance=drought_tolerance)
+        
+        frost_sensitive = self.request.query_params.get('frost_sensitive')
+        if frost_sensitive:
+            queryset = queryset.filter(frost_sensitive=frost_sensitive)
+        
         return queryset
 
 
 class CropKnowledgeBaseDetailView(generics.RetrieveUpdateDestroyAPIView):
     """
-    GET /api/crops/api/knowledge-base/{id}/ - Get details of a knowledge base entry
-    PUT /api/crops/api/knowledge-base/{id}/ - Update a knowledge base entry (Admin only)
-    DELETE /api/crops/api/knowledge-base/{id}/ - Delete a knowledge base entry (Admin only)
+    GET /api/crops/knowledge-base/{id}/ - Get details of a knowledge base entry
+    PUT /api/crops/knowledge-base/{id}/ - Update a knowledge base entry (Admin only)
+    DELETE /api/crops/knowledge-base/{id}/ - Delete a knowledge base entry (Admin only)
     """
     queryset = CropKnowledgeBase.objects.all()
     serializer_class = CropKnowledgeBaseSerializer
@@ -643,7 +693,6 @@ class CropKnowledgeBaseDetailView(generics.RetrieveUpdateDestroyAPIView):
         if self.request.method == 'GET':
             return [IsAuthenticated()]
         return [IsAuthenticated(), PanelAdminUser()]
-
 
 
 # ==================== CROP CONFIGURATION OPTIONS VIEWS ====================
@@ -740,8 +789,6 @@ class GenerateCropRemindersView(generics.GenericAPIView):
     permission_classes = [IsAuthenticated]
     
     def post(self, request):
-        from crops.models import Crop
-        
         crops = Crop.objects.filter(farmer=request.user, status='active')
         total_reminders = 0
         results = []
@@ -797,8 +844,6 @@ class CropRemindersByCropView(generics.GenericAPIView):
     permission_classes = [IsAuthenticated]
     
     def post(self, request, crop_id):
-        from crops.models import Crop
-        
         try:
             crop = Crop.objects.get(id=crop_id, farmer=request.user, status='active')
             reminders = CropReminderService.generate_reminders_for_crop(crop)
@@ -864,9 +909,6 @@ class CropReminderStatsView(generics.GenericAPIView):
     permission_classes = [IsAuthenticated]
     
     def get(self, request):
-        from crops.models import Crop
-        from notifications.models import Notification
-        
         # Get crop counts
         total_crops = Crop.objects.filter(farmer=request.user).count()
         active_crops = Crop.objects.filter(farmer=request.user, status='active').count()

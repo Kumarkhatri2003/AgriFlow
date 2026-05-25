@@ -400,12 +400,15 @@ class CropKnowledgeBase(models.Model):
         ('pulse', 'Pulse'),
         ('cash_crop', 'Cash Crop'),
         ('vegetable', 'Vegetable'),
+        ('tuber', 'Tuber'),
+        ('oilseed', 'Oilseed')
     ]
     category = models.CharField(max_length=20, choices=CATEGORY_CHOICES)
     
     # Season
     SEASON_CHOICES = [
         ('spring', 'Spring'),
+        ('summer', 'Summer'),
         ('monsoon', 'Monsoon'),
         ('autumn', 'Autumn'),
         ('winter', 'Winter'),
@@ -427,24 +430,55 @@ class CropKnowledgeBase(models.Model):
     ph_max = models.FloatField()
     ph_ideal = models.FloatField()
     
-    # Water & Region
-    WATER_CHOICES = [('low', 'Low'), ('medium', 'Medium'), ('high', 'High')]
-    water_req = models.CharField(max_length=10, choices=WATER_CHOICES)
-    region_suitable = models.CharField(max_length=200, help_text="Comma separated: terai,mid-hill,hill,mountain")
-    
-    # Tolerances
-    DROUGHT_CHOICES = [('low', 'Low'), ('medium', 'Medium'), ('high', 'High')]
+     # Tolerances
+    DROUGHT_CHOICES = [
+        ('low', 'Low'), 
+        ('medium', 'Medium'), 
+        ('high', 'High')
+        ]
     drought_tolerance = models.CharField(max_length=10, choices=DROUGHT_CHOICES)
+    
     FROST_CHOICES = [
     ('yes', 'Yes (Frost kills it)'),
     ('no', 'No (Tolerant)'),
     ('tolerant', 'Tolerant (May survive light frost)'),
     ]
-    frost_sensitive = models.CharField(max_length=10, choices=FROST_CHOICES, default='no')
     
+    frost_sensitive = models.CharField(max_length=10, choices=FROST_CHOICES, default='no')
+    # Water & Region
+    WATER_CHOICES = [
+        ('low', 'Low'), 
+        ('medium', 'Medium'), 
+        ('high', 'High')
+        ]
+    water_req = models.CharField(max_length=10, choices=WATER_CHOICES)
+    
+    water_logging_tolerance = models.CharField(max_length=10, choices=DROUGHT_CHOICES, default='medium')
+
+    region_suitable = models.CharField(max_length=200, help_text="Comma separated: terai,mid-hill,hill,mountain")
+    
+    
+   
+   
+    day_length_sensitive = models.BooleanField(default=False)
+    day_length_type = models.CharField(max_length=20, blank=True, null=True, choices=[
+        ('short-day', 'Short Day'),
+        ('long-day', 'Long Day'),
+        ('day-neutral', 'Day Neutral'),
+    ])
+    
+    # Growth
+    growing_days = models.IntegerField(default=100)
+    altitude_min = models.IntegerField(default=0)
+    altitude_max = models.IntegerField(default=3000)
     # Labor & Storage
-    LABOR_CHOICES = [('low', 'Low'), ('medium', 'Medium'), ('high', 'High')]
+    LABOR_CHOICES = [
+        ('low', 'Low'), 
+        ('medium', 'Medium'), 
+        ('high', 'High')
+        ]
     labor_req = models.CharField(max_length=10, choices=LABOR_CHOICES)
+    
     STORAGE_CHOICES = [
         ('very_short', 'Very Short (<1 week)'),
         ('short', 'Short (1-4 weeks)'),
@@ -468,20 +502,99 @@ class CropKnowledgeBase(models.Model):
     def __str__(self):
         return self.name_en
     
-    
-    
 class CropRecommendationHistory(models.Model):
+    """
+    Stores farmer inputs exactly as expert system expects
+    """
+    
     farmer = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE)
-    soil_type = models.CharField(max_length=50)
-    ph = models.FloatField()
-    season = models.CharField(max_length=50)
-    water_availability = models.CharField(max_length=20)
-    region = models.CharField(max_length=50)
-    temperature = models.FloatField(null=True, blank=True)
-    frost_risk = models.BooleanField(null=True,blank=True,default=True) 
-    experience = models.CharField(max_length=20, default='medium')
-    goal = models.CharField(max_length=20, default='mixed')
-    recommendations = models.JSONField()  # Store the recommendations JSON
+    
+    # Required fields
+    region = models.CharField(max_length=50, choices=[
+        ('terai', 'Terai'),
+        ('mid-hill', 'Mid-Hill'),
+        ('hill', 'Hill'),
+        ('mountain', 'Mountain'),
+    ])
+    
+    season = models.CharField(max_length=20, choices=[
+        ('spring', 'Spring'),
+        ('summer', 'Summer'),
+        ('monsoon', 'Monsoon'),
+        ('autumn', 'Autumn'),
+        ('winter', 'Winter'),
+    ])
+    
+    water_source = models.CharField(max_length=50, choices=[
+        ('rainfed_only', 'Rainfed Only'),
+        ('canal', 'Canal'),
+        ('well', 'Well'),
+        ('river', 'River'),
+        ('drip_irrigation', 'Drip Irrigation'),
+    ], default='rainfed_only')
+    
+    soil_type = models.CharField(max_length=50, choices=[
+        ('clay', 'Clay'),
+        ('loamy', 'Loamy'),
+        ('sandy', 'Sandy'),
+        ('silty', 'Silty'),
+        ('clay_loam', 'Clay Loam'),
+    ])
+    
+    labor_availability = models.CharField(max_length=20, choices=[
+        ('low', 'Low'),
+        ('medium', 'Medium'),
+        ('high', 'High'),
+    ], default='medium')
+    
+    market_distance = models.CharField(max_length=20, choices=[
+        ('near', 'Near'),
+        ('medium', 'Medium'),
+        ('far', 'Far'),
+    ], default='near')
+    
+    farming_goal = models.CharField(max_length=20, choices=[
+        ('profit', 'Profit'),
+        ('food_security', 'Food Security'),
+        ('mixed', 'Mixed'),
+        ('subsistence', 'Subsistence'),
+    ], default='mixed')
+    
+    # ========== ADD THESE MISSING FIELDS ==========
+    DROUGHT_RISK_CHOICES = [
+        ('high', 'High Risk'),
+        ('medium', 'Medium Risk'),
+        ('low', 'Low Risk'),
+    ]
+    drought_risk = models.CharField(
+        max_length=10,
+        choices=DROUGHT_RISK_CHOICES,
+        default='medium',
+        help_text="Drought risk level at farm location"
+    )
+    
+    temperature = models.FloatField(
+        null=True,
+        blank=True,
+        help_text="Temperature in °C"
+    )
+    
+    frost_risk = models.BooleanField(
+        default=False,
+        help_text="Does your area experience frost?"
+    )
+    # =============================================
+    
+    # Optional soil test fields
+    ph = models.FloatField(null=True, blank=True)
+    n = models.FloatField(null=True, blank=True, help_text="Nitrogen kg/ha")
+    p = models.FloatField(null=True, blank=True, help_text="Phosphorus kg/ha")
+    k = models.FloatField(null=True, blank=True, help_text="Potassium kg/ha")
+    
+    # Results
+    recommendations = models.JSONField()
+    
+    # Metadata
     created_at = models.DateTimeField(auto_now_add=True)
     
     class Meta:
@@ -490,6 +603,8 @@ class CropRecommendationHistory(models.Model):
     def __str__(self):
         return f"{self.farmer.username} - {self.created_at.date()}"
     
+    
+   
     
 class CropTypeConfig(models.Model):
 

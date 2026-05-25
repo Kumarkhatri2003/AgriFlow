@@ -5,7 +5,7 @@
     "conditions": [
       {"fact": "season", "operator": "eq", "value": "crop.best_season"}
     ],
-    "conclusion": {"fact": "crop_score_adjustment", "value": {"adjustment": 25}},
+    "conclusion": {"fact": "crop_score_adjustment", "value": {"adjustment": 15}},
     "certainty": 0.95,
     "priority": 7,
     "category": "soft",
@@ -17,7 +17,7 @@
     "conditions": [
       {"fact": "season", "operator": "in", "value": "crop.other_seasons"}
     ],
-    "conclusion": {"fact": "crop_score_adjustment", "value": {"adjustment": 10}},
+    "conclusion": {"fact": "crop_score_adjustment", "value": {"adjustment": 8}},
     "certainty": 0.80,
     "priority": 5,
     "category": "soft",
@@ -29,7 +29,7 @@
     "conditions": [
       {"fact": "soil_type", "operator": "eq", "value": "crop.soil_ideal"}
     ],
-    "conclusion": {"fact": "crop_score_adjustment", "value": {"adjustment": 15}},
+    "conclusion": {"fact": "crop_score_adjustment", "value": {"adjustment": 10}},
     "certainty": 0.90,
     "priority": 6,
     "category": "soft",
@@ -41,7 +41,7 @@
     "conditions": [
       {"fact": "soil_type", "operator": "in", "value": "crop.soil_acceptable"}
     ],
-    "conclusion": {"fact": "crop_score_adjustment", "value": {"adjustment": 5}},
+    "conclusion": {"fact": "crop_score_adjustment", "value": {"adjustment": 4}},
     "certainty": 0.75,
     "priority": 4,
     "category": "soft",
@@ -53,7 +53,7 @@
     "conditions": [
       {"fact": "region", "operator": "in", "value": "crop.region_suitable"}
     ],
-    "conclusion": {"fact": "crop_score_adjustment", "value": {"adjustment": 15}},
+    "conclusion": {"fact": "crop_score_adjustment", "value": {"adjustment": 10}},
     "certainty": 0.85,
     "priority": 6,
     "category": "soft",
@@ -78,7 +78,7 @@
       {"fact": "temperature", "operator": "is_not_null", "value": true},
       {"fact": "temperature", "operator": "between", "value": ["crop.temp_min", "crop.temp_max"]}
     ],
-    "conclusion": {"fact": "crop_score_adjustment", "value": {"adjustment": 10}},
+    "conclusion": {"fact": "crop_score_adjustment", "value": {"adjustment": 6}},
     "certainty": 0.80,
     "priority": 4,
     "category": "soft",
@@ -91,7 +91,7 @@
       {"fact": "water_source", "operator": "neq", "value": "rainfed_only"},
       {"fact": "crop.drought_tolerance", "operator": "neq", "value": "low"}
     ],
-    "conclusion": {"fact": "crop_score_adjustment", "value": {"adjustment": 8}},
+    "conclusion": {"fact": "crop_score_adjustment", "value": {"adjustment": 5}},
     "certainty": 0.75,
     "priority": 3,
     "category": "soft",
@@ -104,7 +104,7 @@
       {"fact": "water_source", "operator": "eq", "value": "rainfed_only"},
       {"fact": "crop.drought_tolerance", "operator": "eq", "value": "high"}
     ],
-    "conclusion": {"fact": "crop_score_adjustment", "value": {"adjustment": 12}},
+    "conclusion": {"fact": "crop_score_adjustment", "value": {"adjustment": 6}},
     "certainty": 0.85,
     "priority": 5,
     "category": "soft",
@@ -117,7 +117,7 @@
       {"fact": "water_source", "operator": "eq", "value": "rainfed_only"},
       {"fact": "crop.drought_tolerance", "operator": "eq", "value": "low"}
     ],
-    "conclusion": {"fact": "crop_score_adjustment", "value": {"adjustment": -15}},
+    "conclusion": {"fact": "crop_score_adjustment", "value": {"adjustment": -12}},
     "certainty": 0.85,
     "priority": 5,
     "category": "soft",
@@ -131,7 +131,7 @@
       {"fact": "ph", "operator": "is_not_null", "value": true},
       {"fact": "ph", "operator": "between", "value": ["crop.ph_min", "crop.ph_max"]}
     ],
-    "conclusion": {"fact": "crop_score_adjustment", "value": {"adjustment": 8}},
+    "conclusion": {"fact": "crop_score_adjustment", "value": {"adjustment": 5}},
     "certainty": 0.80,
     "priority": 4,
     "category": "soft",
@@ -141,10 +141,9 @@
     "rule_id": "PH_SUBOPTIMAL",
     "name": "Suboptimal pH",
     "conditions": [
-      {"fact": "ph", "operator": "is_not_null", "value": true},
       {"fact": "ph", "operator": "is_not_null", "value": true}
     ],
-    "conclusion": {"fact": "crop_score_adjustment", "value": {"adjustment": -5}},
+    "conclusion": {"fact": "crop_score_adjustment", "value": {"adjustment": -4}},
     "certainty": 0.65,
     "priority": 2,
     "category": "soft",
@@ -171,11 +170,185 @@
       {"fact": "frost_risk", "operator": "eq", "value": true},
       {"fact": "crop.frost_sensitive", "operator": "eq", "value": "tolerant"}
     ],
-    "conclusion": {"fact": "crop_score_adjustment", "value": {"adjustment": -10}},
+    "conclusion": {"fact": "crop_score_adjustment", "value": {"adjustment": -6}},
     "certainty": 0.70,
     "priority": 3,
     "category": "soft",
     "explanation": "This crop may survive light frost but will be stressed",
     "mitigation": "Use row covers or plant in sheltered location"
+  },
+  {
+    "rule_id": "NPK_BALANCED_HIGH",
+    "name": "High NPK balance boosts score",
+    "conditions": [
+      {"fact": "n", "operator": "between", "value": ["crop.n_need_min", "crop.n_need_max"]},
+      {"fact": "p", "operator": "between", "value": ["crop.p_need_min", "crop.p_need_max"]},
+      {"fact": "k", "operator": "between", "value": ["crop.k_need_min", "crop.k_need_max"]}
+    ],
+    "conclusion": {"fact": "crop_score_adjustment", "value": {"adjustment": 10}},
+    "certainty": 0.90,
+    "priority": 8,
+    "category": "soft",
+    "explanation": "Soil NPK levels are perfectly balanced for this crop"
+  },
+  {
+    "rule_id": "N_EXTREME_DEFICIENCY",
+    "name": "Extreme N deficiency penalty",
+    "conditions": [
+      {"fact": "n", "operator": "lt", "value": "crop.n_need_min * 0.3"}
+    ],
+    "conclusion": {"fact": "crop_score_adjustment", "value": {"adjustment": -15}},
+    "certainty": 0.85,
+    "priority": 7,
+    "category": "soft",
+    "explanation": "Nitrogen level is critically low",
+    "mitigation": "Apply 60-80 kg/ha urea or 5-6 tons/ha compost before planting"
+  },
+  {
+    "rule_id": "P_EXTREME_DEFICIENCY",
+    "name": "Extreme P deficiency penalty",
+    "conditions": [
+      {"fact": "p", "operator": "lt", "value": "crop.p_need_min * 0.3"}
+    ],
+    "conclusion": {"fact": "crop_score_adjustment", "value": {"adjustment": -10}},
+    "certainty": 0.85,
+    "priority": 7,
+    "category": "soft",
+    "explanation": "Phosphorus level is critically low",
+    "mitigation": "Apply 40-50 kg/ha DAP or 4-5 tons/ha well-decomposed manure"
+  },
+  {
+    "rule_id": "K_EXTREME_DEFICIENCY",
+    "name": "Extreme K deficiency penalty",
+    "conditions": [
+      {"fact": "k", "operator": "lt", "value": "crop.k_need_min * 0.3"}
+    ],
+    "conclusion": {"fact": "crop_score_adjustment", "value": {"adjustment": -10}},
+    "certainty": 0.85,
+    "priority": 7,
+    "category": "soft",
+    "explanation": "Potassium level is critically low",
+    "mitigation": "Apply 40-50 kg/ha MOP or 2-3 tons/ha compost"
+  },
+  {
+    "rule_id": "LABOR_HIGH_DEMAND_PENALTY",
+    "name": "High labor demand penalty",
+    "conditions": [
+      {"fact": "labor_availability", "operator": "eq", "value": "low"},
+      {"fact": "crop.labor_req", "operator": "eq", "value": "high"}
+    ],
+    "conclusion": {"fact": "crop_score_adjustment", "value": {"adjustment": -10}},
+    "certainty": 0.80,
+    "priority": 4,
+    "category": "soft",
+    "explanation": "This crop requires high labor input but you have limited labor",
+    "mitigation": "Consider hiring additional labor or choose less labor-intensive crops"
+  },
+  {
+    "rule_id": "LABOR_MEDIUM_DEMAND_PENALTY",
+    "name": "Medium labor demand penalty",
+    "conditions": [
+      {"fact": "labor_availability", "operator": "eq", "value": "low"},
+      {"fact": "crop.labor_req", "operator": "eq", "value": "medium"}
+    ],
+    "conclusion": {"fact": "crop_score_adjustment", "value": {"adjustment": -3}},
+    "certainty": 0.70,
+    "priority": 3,
+    "category": "soft",
+    "explanation": "This crop requires medium labor input with your limited availability",
+    "mitigation": "Plan labor schedule carefully or consider mechanization"
+  },
+  {
+    "rule_id": "MARKET_FAR_SHORT_SHELF",
+    "name": "Far market penalty for short shelf life crops",
+    "conditions": [
+      {"fact": "market_distance", "operator": "eq", "value": "far"},
+      {"fact": "crop.storage_life", "operator": "in", "value": "very_short,short"}
+    ],
+    "conclusion": {"fact": "crop_score_adjustment", "value": {"adjustment": -8}},
+    "certainty": 0.85,
+    "priority": 4,
+    "category": "soft",
+    "explanation": "Far market distance + short shelf life = high spoilage risk",
+    "mitigation": "Consider cold storage or sell through cooperatives"
+  },
+  {
+    "rule_id": "MARKET_FAR_MEDIUM_SHELF",
+    "name": "Far market penalty for medium shelf life crops",
+    "conditions": [
+      {"fact": "market_distance", "operator": "eq", "value": "far"},
+      {"fact": "crop.storage_life", "operator": "eq", "value": "medium"}
+    ],
+    "conclusion": {"fact": "crop_score_adjustment", "value": {"adjustment": -3}},
+    "certainty": 0.75,
+    "priority": 3,
+    "category": "soft",
+    "explanation": "Far market distance with medium shelf life requires planning",
+    "mitigation": "Harvest at optimal time and transport quickly"
+  },
+  {
+    "rule_id": "GOAL_PROFIT_CASH_CROP",
+    "name": "Profit goal bonus for cash crops",
+    "conditions": [
+      {"fact": "farming_goal", "operator": "eq", "value": "profit"},
+      {"fact": "crop.category", "operator": "eq", "value": "cash_crop"}
+    ],
+    "conclusion": {"fact": "crop_score_adjustment", "value": {"adjustment": 5}},
+    "certainty": 0.85,
+    "priority": 5,
+    "category": "soft",
+    "explanation": "Cash crops align with your profit-oriented farming goal"
+  },
+  {
+    "rule_id": "GOAL_FOOD_SECURITY_CEREAL_PULSE",
+    "name": "Food security goal bonus for cereals and pulses",
+    "conditions": [
+      {"fact": "farming_goal", "operator": "eq", "value": "food_security"},
+      {"fact": "crop.category", "operator": "in", "value": "cereal,pulse"}
+    ],
+    "conclusion": {"fact": "crop_score_adjustment", "value": {"adjustment": 5}},
+    "certainty": 0.85,
+    "priority": 5,
+    "category": "soft",
+    "explanation": "Cereals and pulses align with your food security goal"
+  },
+  {
+    "rule_id": "GOAL_MIXED_BONUS",
+    "name": "Mixed goal bonus",
+    "conditions": [
+      {"fact": "farming_goal", "operator": "eq", "value": "mixed"}
+    ],
+    "conclusion": {"fact": "crop_score_adjustment", "value": {"adjustment": 2}},
+    "certainty": 0.70,
+    "priority": 2,
+    "category": "soft",
+    "explanation": "Mixed farming approach gives moderate benefits"
+  },
+  {
+    "rule_id": "DROUGHT_RISK_HIGH_LOW_TOLERANCE",
+    "name": "High drought risk with low tolerance penalty",
+    "conditions": [
+      {"fact": "drought_risk", "operator": "eq", "value": "high"},
+      {"fact": "crop.drought_tolerance", "operator": "eq", "value": "low"}
+    ],
+    "conclusion": {"fact": "crop_score_adjustment", "value": {"adjustment": -8}},
+    "certainty": 0.85,
+    "priority": 6,
+    "category": "soft",
+    "explanation": "High drought risk area + low drought tolerance crop = risky",
+    "mitigation": "Ensure irrigation or choose drought-tolerant varieties"
+  },
+  {
+    "rule_id": "DROUGHT_RISK_LOW_HIGH_TOLERANCE",
+    "name": "Low drought risk with high tolerance bonus",
+    "conditions": [
+      {"fact": "drought_risk", "operator": "eq", "value": "low"},
+      {"fact": "crop.drought_tolerance", "operator": "eq", "value": "high"}
+    ],
+    "conclusion": {"fact": "crop_score_adjustment", "value": {"adjustment": 3}},
+    "certainty": 0.75,
+    "priority": 4,
+    "category": "soft",
+    "explanation": "Low drought risk area with drought-tolerant crop = ideal match"
   }
 ]

@@ -21,8 +21,15 @@ class WorkingMemory:
         if isinstance(value, dict) and "adjustment" in value:
             if fact_name in self.facts:
                 if isinstance(self.facts[fact_name], dict):
-                    # Already a dict - accumulate adjustment
-                    self.facts[fact_name]["adjustment"] = self.facts[fact_name].get("adjustment", 0) + value["adjustment"]
+                    # FIX: Ensure the existing fact has an adjustment key
+                    if "adjustment" not in self.facts[fact_name]:
+                        # Preserve original value if it exists
+                        if "original" not in self.facts[fact_name]:
+                            self.facts[fact_name]["original"] = 0
+                        self.facts[fact_name]["adjustment"] = 0
+                    
+                    # Accumulate adjustment
+                    self.facts[fact_name]["adjustment"] += value["adjustment"]
                 else:
                     # Convert existing non-dict to dict with adjustment
                     original_value = self.facts[fact_name]
@@ -34,7 +41,9 @@ class WorkingMemory:
                 self.certainties[fact_name] = max(certainty, self.certainties.get(fact_name, 0))
             else:
                 # New fact with adjustment
-                self.facts[fact_name] = value.copy() if isinstance(value, dict) else {"adjustment": value["adjustment"]}
+                self.facts[fact_name] = {
+                    "adjustment": value["adjustment"]
+                }
                 self.certainties[fact_name] = certainty
         else:
             # Regular fact assignment
@@ -52,6 +61,13 @@ class WorkingMemory:
     def get_fact(self, fact_name: str) -> Optional[Any]:
         """Get a fact from working memory"""
         return self.facts.get(fact_name)
+    
+    def get_adjustment(self, fact_name: str) -> float:
+        """Get accumulated adjustment for a fact"""
+        fact = self.facts.get(fact_name)
+        if fact and isinstance(fact, dict) and "adjustment" in fact:
+            return fact["adjustment"]
+        return 0.0
     
     def get_certainty(self, fact_name: str) -> float:
         """Get certainty factor for a fact"""

@@ -176,15 +176,16 @@ class Crop:
     
     def get_npk_status(self, n: float, p: float, k: float) -> Dict:
         """Calculate NPK match score with graduated tiers"""
+        # FIX: Always return complete structure even with None values
         status = {
-            "nitrogen": {"status": "Fits", "message": "", "suggestion": "", "score": 0},
-            "phosphorus": {"status": "Fits", "message": "", "suggestion": "", "score": 0},
-            "potassium": {"status": "Fits", "message": "", "suggestion": "", "score": 0},
+            "nitrogen": {"status": "Unknown", "message": "Nitrogen data not provided", "suggestion": "Conduct soil test for accurate N recommendation", "score": 0},
+            "phosphorus": {"status": "Unknown", "message": "Phosphorus data not provided", "suggestion": "Conduct soil test for accurate P recommendation", "score": 0},
+            "potassium": {"status": "Unknown", "message": "Potassium data not provided", "suggestion": "Conduct soil test for accurate K recommendation", "score": 0},
             "total_score": 0
         }
         
         # ========== NITROGEN SCORING ==========
-        if n is not None:
+        if n is not None and n > 0:
             if self.n_need_min <= n <= self.n_need_max:
                 center = (self.n_need_min + self.n_need_max) / 2
                 half_range = (self.n_need_max - self.n_need_min) / 2
@@ -236,9 +237,16 @@ class Crop:
                         "suggestion": "STOP adding nitrogen! Too much causes weak stems, pest problems, and delayed harvest. Plant deep-rooted crops to absorb excess.",
                         "score": -20
                     }
+        elif n is not None and n == 0:
+            status["nitrogen"] = {
+                "status": "Zero", 
+                "message": f"N: 0 kg/ha - no nitrogen available", 
+                "suggestion": "Critical! Apply 60-80 kg/ha urea or 5-6 tons/ha compost before planting",
+                "score": -25
+            }
         
         # ========== PHOSPHORUS SCORING ==========
-        if p is not None:
+        if p is not None and p > 0:
             if self.p_need_min <= p <= self.p_need_max:
                 center = (self.p_need_min + self.p_need_max) / 2
                 half_range = (self.p_need_max - self.p_need_min) / 2
@@ -292,7 +300,7 @@ class Crop:
                     }
         
         # ========== POTASSIUM SCORING ==========
-        if k is not None:
+        if k is not None and k > 0:
             if self.k_need_min <= k <= self.k_need_max:
                 center = (self.k_need_min + self.k_need_max) / 2
                 half_range = (self.k_need_max - self.k_need_min) / 2
