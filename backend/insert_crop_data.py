@@ -1,32 +1,21 @@
-# Get the backend directory path
+#!/usr/bin/env python
+"""Script to insert crop configurations and activity rules"""
+
 import os
 import sys
-
 import django
 
-
-backend_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-
-# Add to path
+# Add the project root to Python path
+backend_dir = os.path.dirname(os.path.abspath(__file__))
 sys.path.append(backend_dir)
 
-# Set Django settings module - Try different possibilities
-if os.path.exists(os.path.join(backend_dir, 'backend', 'settings.py')):
-    os.environ.setdefault('DJANGO_SETTINGS_MODULE', 'backend.settings')
-elif os.path.exists(os.path.join(backend_dir, 'settings.py')):
-    os.environ.setdefault('DJANGO_SETTINGS_MODULE', 'settings')
-else:
-    # Look for any settings file
-    for root, dirs, files in os.walk(backend_dir):
-        if 'settings.py' in files:
-            settings_path = os.path.relpath(os.path.join(root, 'settings.py'), backend_dir)
-            settings_module = settings_path.replace(os.sep, '.').replace('.py', '')
-            os.environ.setdefault('DJANGO_SETTINGS_MODULE', settings_module)
-            break
+# Set the Django settings module
+os.environ.setdefault('DJANGO_SETTINGS_MODULE', 'config.settings')
 
 # Initialize Django
 django.setup()
 
+# Now import Django models (AFTER django.setup())
 from crops.models import CropTypeConfig, CropActivityRule
 
 
@@ -391,7 +380,7 @@ def insert_crop_configs():
 
 
 def insert_activity_rules():
-    """Insert crop-specific activity rules for different crops"""
+    """Insert crop-specific activity rules for different crops (POST-PLANTING ONLY - NO FIELD PREP)"""
     
     # Get all crop configs
     configs = CropTypeConfig.objects.filter(is_active=True)
@@ -400,39 +389,18 @@ def insert_activity_rules():
     
     for config in configs:
         crop_name = config.crop_name
-        variety = config.variety
-        region = config.region
         
         # ==================== PADDY (RICE) SPECIFIC ACTIVITIES ====================
         if crop_name == 'Paddy':
             activities.extend([
-                # Germination Stage
-                {
-                    'crop_config': config,
-                    'growth_stage': 'germination',
-                    'title': 'Seed Treatment',
-                    'description': 'Treat seeds with fungicide to prevent seed-borne diseases',
-                    'measurements': 'Carbendazim 2g/kg seed or Thiram 3g/kg seed',
-                    'target_pest': 'Blast, Bacterial leaf blight, Foot rot',
-                    'day_offset': 0,
-                    'order': 1
-                },
-                {
-                    'crop_config': config,
-                    'growth_stage': 'germination',
-                    'title': 'First Ploughing',
-                    'description': 'Prepare field with first ploughing',
-                    'measurements': 'FYM: 250-300 Kg/Ropani',
-                    'day_offset': 0,
-                    'order': 2
-                },
-                # Vegetative Stage
+                # Vegetative Stage (Post-planting)
                 {
                     'crop_config': config,
                     'growth_stage': 'vegetative',
                     'title': 'Apply Basal Fertilizer',
-                    'description': 'Apply fertilizer before transplanting',
+                    'description': 'Apply fertilizer after transplanting',
                     'measurements': 'Urea: 4.8 Kg/Ropani, DAP: 3.12 Kg/Ropani, Potash: 2.5 Kg/Ropani',
+                    'target_pest': '',
                     'day_offset': 0,
                     'order': 1
                 },
@@ -442,6 +410,7 @@ def insert_activity_rules():
                     'title': 'First Top Dressing',
                     'description': 'Apply Urea during active tillering',
                     'measurements': 'Urea: 2.4 Kg/Ropani',
+                    'target_pest': '',
                     'day_offset': 10,
                     'order': 2
                 },
@@ -451,6 +420,7 @@ def insert_activity_rules():
                     'title': 'First Weeding',
                     'description': 'Remove weeds to reduce competition',
                     'measurements': '',
+                    'target_pest': '',
                     'day_offset': 10,
                     'order': 3
                 },
@@ -460,6 +430,7 @@ def insert_activity_rules():
                     'title': 'Irrigation Management',
                     'description': 'Maintain proper water level in field',
                     'measurements': 'Keep 2-3 cm water',
+                    'target_pest': '',
                     'day_offset': 0,
                     'order': 4
                 },
@@ -480,6 +451,7 @@ def insert_activity_rules():
                     'title': 'Second Top Dressing',
                     'description': 'Apply Urea at panicle initiation',
                     'measurements': 'Urea: 2.4 Kg/Ropani',
+                    'target_pest': '',
                     'day_offset': 0,
                     'order': 1
                 },
@@ -499,6 +471,7 @@ def insert_activity_rules():
                     'title': 'Second Weeding',
                     'description': 'Remove remaining weeds',
                     'measurements': '',
+                    'target_pest': '',
                     'day_offset': 0,
                     'order': 3
                 },
@@ -509,6 +482,7 @@ def insert_activity_rules():
                     'title': 'Reduce Irrigation',
                     'description': 'Start draining water for grain filling',
                     'measurements': 'Stop irrigation 10-15 days before harvest',
+                    'target_pest': '',
                     'day_offset': 0,
                     'order': 1
                 },
@@ -529,6 +503,7 @@ def insert_activity_rules():
                     'title': 'Harvest Paddy',
                     'description': 'Harvest when 80-85% grains are straw colored',
                     'measurements': '',
+                    'target_pest': '',
                     'recommendations': 'Harvest on dry sunny day for better quality',
                     'day_offset': 0,
                     'order': 1
@@ -539,6 +514,7 @@ def insert_activity_rules():
                     'title': 'Post Harvest Management',
                     'description': 'Proper drying and storage',
                     'measurements': 'Dry to 14% moisture content',
+                    'target_pest': '',
                     'day_offset': 0,
                     'order': 2
                 },
@@ -547,26 +523,6 @@ def insert_activity_rules():
         # ==================== MAIZE SPECIFIC ACTIVITIES ====================
         elif crop_name == 'Maize':
             activities.extend([
-                # Germination Stage
-                {
-                    'crop_config': config,
-                    'growth_stage': 'germination',
-                    'title': 'Seed Treatment',
-                    'description': 'Treat seeds with fungicide and insecticide',
-                    'measurements': 'Vitavax 2g/kg seed + Imidacloprid 1ml/kg seed',
-                    'target_pest': 'Seed borne diseases, Termites',
-                    'day_offset': 0,
-                    'order': 1
-                },
-                {
-                    'crop_config': config,
-                    'growth_stage': 'germination',
-                    'title': 'Land Preparation',
-                    'description': 'Prepare field with proper tilth',
-                    'measurements': 'FYM: 10-12 tons/hectare',
-                    'day_offset': 0,
-                    'order': 2
-                },
                 # Vegetative Stage
                 {
                     'crop_config': config,
@@ -574,6 +530,7 @@ def insert_activity_rules():
                     'title': 'Basal Fertilizer Application',
                     'description': 'Apply fertilizer at sowing',
                     'measurements': 'DAP: 60 kg/hectare, Potash: 40 kg/hectare',
+                    'target_pest': '',
                     'day_offset': 0,
                     'order': 1
                 },
@@ -583,6 +540,7 @@ def insert_activity_rules():
                     'title': 'First Top Dressing',
                     'description': 'Apply Urea at knee height stage',
                     'measurements': 'Urea: 80 kg/hectare',
+                    'target_pest': '',
                     'day_offset': 8,
                     'order': 2
                 },
@@ -590,8 +548,9 @@ def insert_activity_rules():
                     'crop_config': config,
                     'growth_stage': 'vegetative',
                     'title': 'Weeding and Earthing Up',
-                    'description': 'Remove weeds and earthing up soil',
+                    'description': 'Remove weeds and earth up soil',
                     'measurements': '',
+                    'target_pest': '',
                     'day_offset': 8,
                     'order': 3
                 },
@@ -612,6 +571,7 @@ def insert_activity_rules():
                     'title': 'Second Top Dressing',
                     'description': 'Apply Urea at tasseling stage',
                     'measurements': 'Urea: 40 kg/hectare',
+                    'target_pest': '',
                     'day_offset': 0,
                     'order': 1
                 },
@@ -632,6 +592,7 @@ def insert_activity_rules():
                     'title': 'Irrigation Management',
                     'description': 'Reduce water for grain filling',
                     'measurements': '',
+                    'target_pest': '',
                     'day_offset': 0,
                     'order': 1
                 },
@@ -642,6 +603,7 @@ def insert_activity_rules():
                     'title': 'Harvest Maize',
                     'description': 'Harvest when husk turns brown and grains are hard',
                     'measurements': '',
+                    'target_pest': '',
                     'recommendations': 'Harvest at 20-25% moisture content',
                     'day_offset': 0,
                     'order': 1
@@ -651,26 +613,6 @@ def insert_activity_rules():
         # ==================== WHEAT SPECIFIC ACTIVITIES ====================
         elif crop_name == 'Wheat':
             activities.extend([
-                # Germination Stage
-                {
-                    'crop_config': config,
-                    'growth_stage': 'germination',
-                    'title': 'Seed Treatment',
-                    'description': 'Treat seeds against smut and rust',
-                    'measurements': 'Vitavax 2g/kg seed',
-                    'target_pest': 'Loose smut, Flag smut',
-                    'day_offset': 0,
-                    'order': 1
-                },
-                {
-                    'crop_config': config,
-                    'growth_stage': 'germination',
-                    'title': 'Field Preparation',
-                    'description': 'Proper land preparation for sowing',
-                    'measurements': 'FYM: 8-10 tons/hectare',
-                    'day_offset': 0,
-                    'order': 2
-                },
                 # Vegetative Stage
                 {
                     'crop_config': config,
@@ -678,6 +620,7 @@ def insert_activity_rules():
                     'title': 'Basal Fertilizer',
                     'description': 'Apply DAP and Potash at sowing',
                     'measurements': 'DAP: 60 kg/hectare, Potash: 40 kg/hectare',
+                    'target_pest': '',
                     'day_offset': 0,
                     'order': 1
                 },
@@ -687,6 +630,7 @@ def insert_activity_rules():
                     'title': 'First Irrigation',
                     'description': 'First irrigation at crown root initiation',
                     'measurements': '21-25 days after sowing',
+                    'target_pest': '',
                     'day_offset': 0,
                     'order': 2
                 },
@@ -696,6 +640,7 @@ def insert_activity_rules():
                     'title': 'First Top Dressing',
                     'description': 'Apply Urea at tillering stage',
                     'measurements': 'Urea: 60 kg/hectare',
+                    'target_pest': '',
                     'day_offset': 10,
                     'order': 3
                 },
@@ -706,6 +651,7 @@ def insert_activity_rules():
                     'title': 'Second Top Dressing',
                     'description': 'Apply Urea at booting stage',
                     'measurements': 'Urea: 40 kg/hectare',
+                    'target_pest': '',
                     'day_offset': 0,
                     'order': 1
                 },
@@ -726,6 +672,7 @@ def insert_activity_rules():
                     'title': 'Final Irrigation',
                     'description': 'Last irrigation before harvest',
                     'measurements': '',
+                    'target_pest': '',
                     'day_offset': 0,
                     'order': 1
                 },
@@ -736,6 +683,7 @@ def insert_activity_rules():
                     'title': 'Harvest Wheat',
                     'description': 'Harvest when grains are hard and straw turns yellow',
                     'measurements': '',
+                    'target_pest': '',
                     'recommendations': 'Harvest at 18-20% moisture content',
                     'day_offset': 0,
                     'order': 1
@@ -745,31 +693,14 @@ def insert_activity_rules():
         # ==================== POTATO SPECIFIC ACTIVITIES ====================
         elif crop_name == 'Potato':
             activities.extend([
-                {
-                    'crop_config': config,
-                    'growth_stage': 'germination',
-                    'title': 'Seed Tuber Treatment',
-                    'description': 'Treat seed tubers before planting',
-                    'measurements': 'Boric acid 1% for 15 minutes',
-                    'target_pest': 'Late blight, Common scab',
-                    'day_offset': 0,
-                    'order': 1
-                },
-                {
-                    'crop_config': config,
-                    'growth_stage': 'germination',
-                    'title': 'Sprouting Treatment',
-                    'description': 'Pre-sprouting of seed tubers',
-                    'measurements': 'Store in diffused light for 15-20 days',
-                    'day_offset': 0,
-                    'order': 2
-                },
+                # Vegetative Stage
                 {
                     'crop_config': config,
                     'growth_stage': 'vegetative',
                     'title': 'Fertilizer Application',
                     'description': 'Apply NPK fertilizer',
                     'measurements': 'N:P:K = 100:50:80 kg/hectare',
+                    'target_pest': '',
                     'day_offset': 0,
                     'order': 1
                 },
@@ -779,15 +710,18 @@ def insert_activity_rules():
                     'title': 'Earthing Up',
                     'description': 'First earthing up at 20-25 days',
                     'measurements': '',
+                    'target_pest': '',
                     'day_offset': 5,
                     'order': 2
                 },
+                # Flowering Stage
                 {
                     'crop_config': config,
                     'growth_stage': 'flowering',
                     'title': 'Second Earthing Up',
                     'description': 'Second earthing up at flowering',
                     'measurements': '',
+                    'target_pest': '',
                     'day_offset': 0,
                     'order': 1
                 },
@@ -801,21 +735,25 @@ def insert_activity_rules():
                     'day_offset': 5,
                     'order': 2
                 },
+                # Maturation Stage
                 {
                     'crop_config': config,
                     'growth_stage': 'maturation',
                     'title': 'Stop Irrigation',
                     'description': 'Stop watering 2 weeks before harvest',
                     'measurements': '',
+                    'target_pest': '',
                     'day_offset': 0,
                     'order': 1
                 },
+                # Harvest Stage
                 {
                     'crop_config': config,
                     'growth_stage': 'harvest',
                     'title': 'Harvest Potato',
                     'description': 'Harvest when vines dry completely',
                     'measurements': '',
+                    'target_pest': '',
                     'recommendations': 'Harvest on sunny day, cure for 10-14 days',
                     'day_offset': 0,
                     'order': 1
@@ -825,22 +763,14 @@ def insert_activity_rules():
         # ==================== MUSTARD SPECIFIC ACTIVITIES ====================
         elif crop_name == 'Mustard':
             activities.extend([
-                {
-                    'crop_config': config,
-                    'growth_stage': 'germination',
-                    'title': 'Seed Treatment',
-                    'description': 'Treat seeds against Alternaria blight',
-                    'measurements': 'Carbendazim 2g/kg seed',
-                    'target_pest': 'Alternaria blight',
-                    'day_offset': 0,
-                    'order': 1
-                },
+                # Vegetative Stage
                 {
                     'crop_config': config,
                     'growth_stage': 'vegetative',
                     'title': 'Fertilizer Application',
                     'description': 'Apply NPK fertilizer',
                     'measurements': 'N:P:K = 60:40:30 kg/hectare',
+                    'target_pest': '',
                     'day_offset': 0,
                     'order': 1
                 },
@@ -850,9 +780,11 @@ def insert_activity_rules():
                     'title': 'First Irrigation',
                     'description': 'Irrigate at rosette stage',
                     'measurements': '',
+                    'target_pest': '',
                     'day_offset': 10,
                     'order': 2
                 },
+                # Flowering Stage
                 {
                     'crop_config': config,
                     'growth_stage': 'flowering',
@@ -863,21 +795,25 @@ def insert_activity_rules():
                     'day_offset': 0,
                     'order': 1
                 },
+                # Maturation Stage
                 {
                     'crop_config': config,
                     'growth_stage': 'maturation',
                     'title': 'Stop Irrigation',
                     'description': 'Stop watering at pod formation',
                     'measurements': '',
+                    'target_pest': '',
                     'day_offset': 0,
                     'order': 1
                 },
+                # Harvest Stage
                 {
                     'crop_config': config,
                     'growth_stage': 'harvest',
                     'title': 'Harvest Mustard',
                     'description': 'Harvest when pods turn yellow',
                     'measurements': '',
+                    'target_pest': '',
                     'recommendations': 'Harvest in morning to avoid shattering',
                     'day_offset': 0,
                     'order': 1
@@ -887,24 +823,18 @@ def insert_activity_rules():
         # ==================== LENTIL SPECIFIC ACTIVITIES ====================
         elif crop_name == 'Lentil':
             activities.extend([
-                {
-                    'crop_config': config,
-                    'growth_stage': 'germination',
-                    'title': 'Seed Treatment',
-                    'description': 'Treat with Rhizobium culture',
-                    'measurements': 'Rhizobium leguminosarum 500g/10kg seed',
-                    'day_offset': 0,
-                    'order': 1
-                },
+                # Vegetative Stage
                 {
                     'crop_config': config,
                     'growth_stage': 'vegetative',
                     'title': 'Fertilizer Application',
                     'description': 'Apply DAP at sowing',
                     'measurements': 'DAP: 25 kg/hectare',
+                    'target_pest': '',
                     'day_offset': 0,
                     'order': 1
                 },
+                # Flowering Stage
                 {
                     'crop_config': config,
                     'growth_stage': 'flowering',
@@ -915,12 +845,14 @@ def insert_activity_rules():
                     'day_offset': 0,
                     'order': 1
                 },
+                # Harvest Stage
                 {
                     'crop_config': config,
                     'growth_stage': 'harvest',
                     'title': 'Harvest Lentil',
                     'description': 'Harvest when pods turn brown',
                     'measurements': '',
+                    'target_pest': '',
                     'recommendations': 'Harvest when 80% pods mature',
                     'day_offset': 0,
                     'order': 1
@@ -930,25 +862,18 @@ def insert_activity_rules():
         # ==================== MILLET SPECIFIC ACTIVITIES ====================
         elif crop_name == 'Millet':
             activities.extend([
-                {
-                    'crop_config': config,
-                    'growth_stage': 'germination',
-                    'title': 'Seed Treatment',
-                    'description': 'Treat seeds for downy mildew',
-                    'measurements': 'Metalaxyl 2g/kg seed',
-                    'target_pest': 'Downy mildew',
-                    'day_offset': 0,
-                    'order': 1
-                },
+                # Vegetative Stage
                 {
                     'crop_config': config,
                     'growth_stage': 'vegetative',
                     'title': 'Fertilizer Application',
                     'description': 'Apply NPK fertilizer',
                     'measurements': 'N:P:K = 40:20:20 kg/hectare',
+                    'target_pest': '',
                     'day_offset': 0,
                     'order': 1
                 },
+                # Flowering Stage
                 {
                     'crop_config': config,
                     'growth_stage': 'flowering',
@@ -959,12 +884,14 @@ def insert_activity_rules():
                     'day_offset': 0,
                     'order': 1
                 },
+                # Harvest Stage
                 {
                     'crop_config': config,
                     'growth_stage': 'harvest',
                     'title': 'Harvest Millet',
                     'description': 'Harvest when grains are hard',
                     'measurements': '',
+                    'target_pest': '',
                     'recommendations': 'Cut heads when grains are mature',
                     'day_offset': 0,
                     'order': 1
@@ -974,40 +901,36 @@ def insert_activity_rules():
         # ==================== BARLEY SPECIFIC ACTIVITIES ====================
         elif crop_name == 'Barley':
             activities.extend([
-                {
-                    'crop_config': config,
-                    'growth_stage': 'germination',
-                    'title': 'Seed Treatment',
-                    'description': 'Treat seeds for smut',
-                    'measurements': 'Vitavax 2g/kg seed',
-                    'target_pest': 'Covered smut, Loose smut',
-                    'day_offset': 0,
-                    'order': 1
-                },
+                # Vegetative Stage
                 {
                     'crop_config': config,
                     'growth_stage': 'vegetative',
                     'title': 'Fertilizer Application',
                     'description': 'Apply NPK fertilizer',
                     'measurements': 'N:P:K = 60:30:20 kg/hectare',
+                    'target_pest': '',
                     'day_offset': 0,
                     'order': 1
                 },
+                # Flowering Stage
                 {
                     'crop_config': config,
                     'growth_stage': 'flowering',
                     'title': 'Irrigation Management',
                     'description': 'Critical irrigation at heading',
                     'measurements': '',
+                    'target_pest': '',
                     'day_offset': 0,
                     'order': 1
                 },
+                # Harvest Stage
                 {
                     'crop_config': config,
                     'growth_stage': 'harvest',
                     'title': 'Harvest Barley',
                     'description': 'Harvest when grains are hard',
                     'measurements': '',
+                    'target_pest': '',
                     'recommendations': 'Harvest at 18-20% moisture',
                     'day_offset': 0,
                     'order': 1
@@ -1017,39 +940,36 @@ def insert_activity_rules():
         # ==================== BUCKWHEAT SPECIFIC ACTIVITIES ====================
         elif crop_name == 'Buckwheat':
             activities.extend([
-                {
-                    'crop_config': config,
-                    'growth_stage': 'germination',
-                    'title': 'Seed Treatment',
-                    'description': 'No chemical treatment needed for buckwheat',
-                    'measurements': '',
-                    'day_offset': 0,
-                    'order': 1
-                },
+                # Vegetative Stage
                 {
                     'crop_config': config,
                     'growth_stage': 'vegetative',
                     'title': 'Fertilizer Application',
                     'description': 'Apply compost',
                     'measurements': 'FYM: 5-6 tons/hectare',
+                    'target_pest': '',
                     'day_offset': 0,
                     'order': 1
                 },
+                # Flowering Stage
                 {
                     'crop_config': config,
                     'growth_stage': 'flowering',
                     'title': 'Weeding',
                     'description': 'Manual weeding',
                     'measurements': '',
+                    'target_pest': '',
                     'day_offset': 0,
                     'order': 1
                 },
+                # Harvest Stage
                 {
                     'crop_config': config,
                     'growth_stage': 'harvest',
                     'title': 'Harvest Buckwheat',
                     'description': 'Harvest when 75% seeds turn brown',
                     'measurements': '',
+                    'target_pest': '',
                     'recommendations': 'Harvest in morning to reduce shattering',
                     'day_offset': 0,
                     'order': 1
@@ -1059,24 +979,18 @@ def insert_activity_rules():
         # ==================== SOYBEAN SPECIFIC ACTIVITIES ====================
         elif crop_name == 'Soybean':
             activities.extend([
-                {
-                    'crop_config': config,
-                    'growth_stage': 'germination',
-                    'title': 'Seed Treatment',
-                    'description': 'Treat with Rhizobium and fungicide',
-                    'measurements': 'Rhizobium japonicum + Carbendazim',
-                    'day_offset': 0,
-                    'order': 1
-                },
+                # Vegetative Stage
                 {
                     'crop_config': config,
                     'growth_stage': 'vegetative',
                     'title': 'Fertilizer Application',
                     'description': 'Apply DAP at sowing',
                     'measurements': 'DAP: 50 kg/hectare',
+                    'target_pest': '',
                     'day_offset': 0,
                     'order': 1
                 },
+                # Flowering Stage
                 {
                     'crop_config': config,
                     'growth_stage': 'flowering',
@@ -1087,12 +1001,14 @@ def insert_activity_rules():
                     'day_offset': 0,
                     'order': 1
                 },
+                # Harvest Stage
                 {
                     'crop_config': config,
                     'growth_stage': 'harvest',
                     'title': 'Harvest Soybean',
                     'description': 'Harvest when pods turn brown',
                     'measurements': '',
+                    'target_pest': '',
                     'recommendations': 'Harvest at 14% moisture',
                     'day_offset': 0,
                     'order': 1
@@ -1102,22 +1018,14 @@ def insert_activity_rules():
         # ==================== SUGARCANE SPECIFIC ACTIVITIES ====================
         elif crop_name == 'Sugarcane':
             activities.extend([
-                {
-                    'crop_config': config,
-                    'growth_stage': 'germination',
-                    'title': 'Seed Treatment',
-                    'description': 'Treat setts with fungicide',
-                    'measurements': 'Carbendazim 1g/liter water',
-                    'target_pest': 'Red rot, Smut',
-                    'day_offset': 0,
-                    'order': 1
-                },
+                # Vegetative Stage
                 {
                     'crop_config': config,
                     'growth_stage': 'vegetative',
                     'title': 'Fertilizer Application',
                     'description': 'Apply NPK fertilizer',
                     'measurements': 'N:P:K = 150:60:60 kg/hectare',
+                    'target_pest': '',
                     'day_offset': 0,
                     'order': 1
                 },
@@ -1127,49 +1035,128 @@ def insert_activity_rules():
                     'title': 'Earthing Up',
                     'description': 'Earth up soil around plants',
                     'measurements': '',
+                    'target_pest': '',
                     'day_offset': 30,
                     'order': 2
                 },
                 {
                     'crop_config': config,
+                    'growth_stage': 'vegetative',
+                    'title': 'Second Fertilizer Application',
+                    'description': 'Apply Urea at tillering stage',
+                    'measurements': 'Urea: 80 kg/hectare',
+                    'target_pest': '',
+                    'day_offset': 45,
+                    'order': 3
+                },
+                {
+                    'crop_config': config,
+                    'growth_stage': 'vegetative',
+                    'title': 'Weeding',
+                    'description': 'Remove weeds to reduce competition',
+                    'measurements': '',
+                    'target_pest': '',
+                    'day_offset': 30,
+                    'order': 4
+                },
+                {
+                    'crop_config': config,
+                    'growth_stage': 'vegetative',
+                    'title': 'Pest Monitoring',
+                    'description': 'Check for stem borer and scale insects',
+                    'measurements': '',
+                    'target_pest': 'Stem borer, Scale insects, Termites',
+                    'day_offset': 10,
+                    'order': 5
+                },
+                # Flowering Stage (if occurs)
+                {
+                    'crop_config': config,
+                    'growth_stage': 'flowering',
+                    'title': 'Pest Control',
+                    'description': 'Control pests during flowering',
+                    'measurements': '',
+                    'target_pest': 'Stem borer, White grub',
+                    'day_offset': 5,
+                    'order': 1
+                },
+                {
+                    'crop_config': config,
+                    'growth_stage': 'flowering',
+                    'title': 'Irrigation Management',
+                    'description': 'Regular irrigation during grand growth',
+                    'measurements': 'Irrigate every 7-10 days',
+                    'target_pest': '',
+                    'day_offset': 0,
+                    'order': 2
+                },
+                # Maturation Stage
+                {
+                    'crop_config': config,
                     'growth_stage': 'maturation',
                     'title': 'Trash Mulching',
-                    'description': 'Apply trash mulching',
+                    'description': 'Apply trash mulching to conserve moisture',
                     'measurements': '',
+                    'target_pest': '',
                     'day_offset': 0,
                     'order': 1
                 },
+                {
+                    'crop_config': config,
+                    'growth_stage': 'maturation',
+                    'title': 'Reduce Irrigation',
+                    'description': 'Reduce water to enhance sugar accumulation',
+                    'measurements': 'Stop irrigation 2-3 weeks before harvest',
+                    'target_pest': '',
+                    'day_offset': 15,
+                    'order': 2
+                },
+                {
+                    'crop_config': config,
+                    'growth_stage': 'maturation',
+                    'title': 'Brix Testing',
+                    'description': 'Test sugar content periodically',
+                    'measurements': 'Target Brix > 20%',
+                    'target_pest': '',
+                    'day_offset': 0,
+                    'order': 3
+                },
+                # Harvest Stage
                 {
                     'crop_config': config,
                     'growth_stage': 'harvest',
                     'title': 'Harvest Sugarcane',
                     'description': 'Harvest when sugar content is maximum',
                     'measurements': '',
-                    'recommendations': 'Harvest at 10-12 months age',
+                    'target_pest': '',
+                    'recommendations': 'Harvest at 10-12 months age for maximum sucrose',
                     'day_offset': 0,
                     'order': 1
+                },
+                {
+                    'crop_config': config,
+                    'growth_stage': 'harvest',
+                    'title': 'Post Harvest Management',
+                    'description': 'Process or store harvested cane',
+                    'measurements': '',
+                    'target_pest': '',
+                    'recommendations': 'Process within 24-48 hours to prevent sucrose loss',
+                    'day_offset': 0,
+                    'order': 2
                 },
             ])
         
         # ==================== GINGER SPECIFIC ACTIVITIES ====================
         elif crop_name == 'Ginger':
             activities.extend([
-                {
-                    'crop_config': config,
-                    'growth_stage': 'germination',
-                    'title': 'Rhizome Treatment',
-                    'description': 'Treat rhizomes before planting',
-                    'measurements': 'Carbendazim + Mancozeb 2g/liter for 30 min',
-                    'target_pest': 'Rhizome rot',
-                    'day_offset': 0,
-                    'order': 1
-                },
+                # Vegetative Stage
                 {
                     'crop_config': config,
                     'growth_stage': 'vegetative',
                     'title': 'Fertilizer Application',
                     'description': 'Apply NPK fertilizer',
                     'measurements': 'N:P:K = 75:50:75 kg/hectare',
+                    'target_pest': '',
                     'day_offset': 0,
                     'order': 1
                 },
@@ -1177,26 +1164,61 @@ def insert_activity_rules():
                     'crop_config': config,
                     'growth_stage': 'vegetative',
                     'title': 'Mulching',
-                    'description': 'Apply organic mulch',
+                    'description': 'Apply organic mulch to conserve moisture',
                     'measurements': 'Green leaves 10-15 tons/hectare',
+                    'target_pest': '',
                     'day_offset': 0,
                     'order': 2
                 },
+                {
+                    'crop_config': config,
+                    'growth_stage': 'vegetative',
+                    'title': 'Weeding',
+                    'description': 'Manual weeding to reduce competition',
+                    'measurements': '',
+                    'target_pest': '',
+                    'day_offset': 20,
+                    'order': 3
+                },
+                {
+                    'crop_config': config,
+                    'growth_stage': 'vegetative',
+                    'title': 'Irrigation Management',
+                    'description': 'Maintain adequate moisture',
+                    'measurements': 'Irrigate weekly in dry periods',
+                    'target_pest': '',
+                    'day_offset': 0,
+                    'order': 4
+                },
+                # Maturation Stage
                 {
                     'crop_config': config,
                     'growth_stage': 'maturation',
                     'title': 'Stop Irrigation',
                     'description': 'Stop water 1 month before harvest',
                     'measurements': '',
+                    'target_pest': '',
                     'day_offset': 0,
                     'order': 1
                 },
+                {
+                    'crop_config': config,
+                    'growth_stage': 'maturation',
+                    'title': 'Disease Control',
+                    'description': 'Monitor for rhizome rot',
+                    'measurements': '',
+                    'target_pest': 'Rhizome rot, Leaf spot',
+                    'day_offset': 10,
+                    'order': 2
+                },
+                # Harvest Stage
                 {
                     'crop_config': config,
                     'growth_stage': 'harvest',
                     'title': 'Harvest Ginger',
                     'description': 'Harvest when leaves turn yellow',
                     'measurements': '',
+                    'target_pest': '',
                     'recommendations': 'Harvest for seed at 8 months, for market at 10 months',
                     'day_offset': 0,
                     'order': 1
@@ -1206,22 +1228,14 @@ def insert_activity_rules():
         # ==================== TURMERIC SPECIFIC ACTIVITIES ====================
         elif crop_name == 'Turmeric':
             activities.extend([
-                {
-                    'crop_config': config,
-                    'growth_stage': 'germination',
-                    'title': 'Rhizome Treatment',
-                    'description': 'Treat rhizomes with fungicide',
-                    'measurements': 'Mancozeb 3g/liter water for 30 min',
-                    'target_pest': 'Rhizome rot, Leaf spot',
-                    'day_offset': 0,
-                    'order': 1
-                },
+                # Vegetative Stage
                 {
                     'crop_config': config,
                     'growth_stage': 'vegetative',
                     'title': 'Fertilizer Application',
                     'description': 'Apply NPK fertilizer',
                     'measurements': 'N:P:K = 60:40:60 kg/hectare',
+                    'target_pest': '',
                     'day_offset': 0,
                     'order': 1
                 },
@@ -1229,11 +1243,23 @@ def insert_activity_rules():
                     'crop_config': config,
                     'growth_stage': 'vegetative',
                     'title': 'Mulching and Earthing Up',
-                    'description': 'Apply mulch and earth up',
+                    'description': 'Apply mulch and earth up soil',
                     'measurements': '',
+                    'target_pest': '',
                     'day_offset': 0,
                     'order': 2
                 },
+                {
+                    'crop_config': config,
+                    'growth_stage': 'vegetative',
+                    'title': 'Weeding',
+                    'description': 'Manual weeding',
+                    'measurements': '',
+                    'target_pest': '',
+                    'day_offset': 20,
+                    'order': 3
+                },
+                # Maturation Stage
                 {
                     'crop_config': config,
                     'growth_stage': 'maturation',
@@ -1246,10 +1272,22 @@ def insert_activity_rules():
                 },
                 {
                     'crop_config': config,
+                    'growth_stage': 'maturation',
+                    'title': 'Stop Irrigation',
+                    'description': 'Stop watering before harvest',
+                    'measurements': '',
+                    'target_pest': '',
+                    'day_offset': 15,
+                    'order': 2
+                },
+                # Harvest Stage
+                {
+                    'crop_config': config,
                     'growth_stage': 'harvest',
                     'title': 'Harvest Turmeric',
                     'description': 'Harvest when leaves dry completely',
                     'measurements': '',
+                    'target_pest': '',
                     'recommendations': 'Harvest at 7-9 months for processing',
                     'day_offset': 0,
                     'order': 1
