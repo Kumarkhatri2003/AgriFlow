@@ -51,6 +51,7 @@ class FarmerListSerializer(serializers.ModelSerializer):
     region = serializers.CharField(source='get_geographical_region_display', default='-')
     status = serializers.SerializerMethodField()
     
+
     class Meta:
         model = User
         fields = [
@@ -153,18 +154,21 @@ class CropListAdminSerializer(serializers.ModelSerializer):
     farmer_email = serializers.CharField(source='farmer.email', read_only=True)
     growth_stage_display = serializers.CharField(source='get_growth_stage_display', read_only=True)
     status_badge = serializers.SerializerMethodField()
-    
+    district = serializers.SerializerMethodField()
     class Meta:
         model = Crop
         fields = [
             'id', 'name', 'variety', 'farmer_name', 'farmer_email', 'field_name',
             'field_area', 'area_unit', 'planting_date', 'expected_harvest_date',
-            'growth_stage', 'growth_stage_display', 'status', 'status_badge', 'created_at'
+            'growth_stage', 'growth_stage_display', 'status', 'status_badge','district', 'created_at'
         ]
     
     def get_status_badge(self, obj):
         colors = {'active': 'green', 'harvested': 'blue', 'done': 'gray'}
         return {'text': obj.status, 'color': colors.get(obj.status, 'gray')}
+    
+    def get_district(self, obj):
+        return obj.farmer.district or obj.farmer.farm_district or 'N/A'
 
 
 class CropDetailAdminSerializer(serializers.ModelSerializer):
@@ -189,46 +193,81 @@ class CropDetailAdminSerializer(serializers.ModelSerializer):
     
     def get_growth_timeline(self, obj):
         timeline = []
-        stages = ['seeding', 'vegetative', 'flowering', 'fruiting', 'harvest']
-        days_since_planting = (timezone.now().date() - obj.planting_date).days if obj.planting_date else 0
+        # Updated stages to match your model
+        stages = ['germination', 'vegetative', 'flowering', 'maturation', 'harvest']
+        stage_display = {
+            'germination': 'Germination',
+            'vegetative': 'Vegetative',
+            'flowering': 'Flowering',
+            'maturation': 'Maturation',
+            'harvest': 'Harvest'
+        }
         
-        for stage in stages:
+        current_stage = obj.growth_stage if obj.growth_stage else 'germination'
+        
+        for idx, stage in enumerate(stages):
+            # Calculate estimated date for each stage (20 days per stage)
+            estimated_days = idx * 20
+            estimated_date = None
+            if obj.planting_date:
+                try:
+                    estimated_date = obj.planting_date + timedelta(days=estimated_days)
+                except:
+                    estimated_date = None
+            
+            # Determine status
+            stage_index = stages.index(stage)
+            current_index = stages.index(current_stage) if current_stage in stages else 0
+            
+            if stage_index < current_index:
+                status = 'completed'
+            elif stage_index == current_index:
+                status = 'current'
+            else:
+                status = 'upcoming'
+            
             timeline.append({
                 'stage': stage,
-                'status': 'completed' if stages.index(stage) < stages.index(obj.growth_stage) else
-                         'current' if stage == obj.growth_stage else 'upcoming',
-                'date': obj.planting_date + timedelta(days=stages.index(stage) * (obj.days_to_maturity / 5))
-                if hasattr(obj, 'days_to_maturity') else None
+                'stage_display': stage_display.get(stage, stage.capitalize()),
+                'status': status,
+                'date': estimated_date
             })
         return timeline
     
     def get_expense_breakdown(self, obj):
         return {
-            'fertilizers': obj.total_fertilizer_cost,
-            'pesticides': obj.total_pesticide_cost,
-            'labor': obj.total_labor_costs if hasattr(obj, 'total_labor_costs') else 0,
-            'other': obj.total_other_expense,
-            'total': obj.total_expense
+            'fertilizers': float(obj.total_fertilizer_cost or 0),
+            'pesticides': float(obj.total_pesticide_cost or 0),
+            'labor': float(obj.total_labor_cost or 0),
+            'other': float(obj.total_other_expense or 0),
+            'total': float(obj.total_expense or 0)
         }
     
     def get_harvest_details(self, obj):
         harvests = obj.harvests.all()
         return {
             'count': harvests.count(),
-            'total_quantity': sum(h.quantity for h in harvests),
-            'recent_harvests': [{'date': h.harvest_date, 'quantity': h.quantity, 'quality': h.quality} 
-                               for h in harvests[:5]]
+            'total_quantity': sum(float(h.quantity) for h in harvests),
+            'recent_harvests': [
+                {
+                    'date': h.harvest_date,
+                    'quantity': float(h.quantity),
+                    'quality': h.quality,
+                    'unit': h.unit
+                } 
+                for h in harvests[:5]
+            ]
         }
     
     def get_yield_analysis(self, obj):
-        expected_yield = 1000  # Default or from crop knowledge base
-        actual_yield = sum(h.quantity for h in obj.harvests.all())
+        expected_yield = 1000  # Default value
+        actual_yield = sum(float(h.quantity) for h in obj.harvests.all())
+        achievement = (actual_yield / expected_yield * 100) if expected_yield > 0 else 0
         return {
             'expected_yield': expected_yield,
             'actual_yield': actual_yield,
-            'achievement_percentage': (actual_yield / expected_yield * 100) if expected_yield else 0
+            'achievement_percentage': round(achievement, 2)
         }
-
 
 class CropRegisterSerializer(serializers.Serializer):
     farmer_id = serializers.IntegerField()
@@ -272,21 +311,16 @@ class RevenueByFarmerSerializer(serializers.Serializer):
 class LivestockListAdminSerializer(serializers.ModelSerializer):
     farmer_name = serializers.CharField(source='farmer.get_full_name', read_only=True)
     animal_type_name = serializers.CharField(source='animal_type.name', read_only=True)
-    health_status_badge = serializers.SerializerMethodField()
     age_months = serializers.SerializerMethodField()
-    health_status = serializers.SerializerMethodField()
-    
+    is_pregnant = serializers.BooleanField(read_only=True)
+
     class Meta:
         model = Animal
         fields = [
             'id', 'name', 'tag_number', 'animal_type_name', 'gender',
-            'age_months', 'health_status', 'health_status_badge', 'status',
-            'farmer_name', 'created_at'
+            'age_months','status',
+            'farmer_name', 'created_at','is_pregnant'
         ]
-    
-    def get_health_status_badge(self, obj):
-        colors = {'good': 'green', 'fair': 'orange', 'poor': 'red'}
-        return {'text': obj.health_status or 'Unknown', 'color': colors.get(obj.health_status, 'gray')}
             
     def get_age_months(self,obj):
         """Calculate age in months from birth_date"""
@@ -297,18 +331,7 @@ class LivestockListAdminSerializer(serializers.ModelSerializer):
             return months
         return None
     
-    def get_health_status(self,obj):
-        """Determine health status based on available date"""
-        
-        if obj.status == 'active':
-            return 'Active'
-        elif obj.status == 'sold':
-            return 'Sold'
-        elif obj.status == 'dead':
-            return 'Deceased'
-        elif obj.status == 'butchered':
-            return 'Butchered'
-        return 'Unknown'
+    
             
             
 class BreedingRecordAdminSerializer(serializers.ModelSerializer):
@@ -444,10 +467,11 @@ class RecentActivitySerializer(serializers.Serializer):
 class AdminUserListSerializer(serializers.ModelSerializer):
     """List admin users"""
     full_name = serializers.SerializerMethodField()
-    
+    district = serializers.CharField( read_only=True, default='N/A')  # Add this line
+
     class Meta:
         model = User
-        fields = ['id', 'username', 'email', 'full_name', 'phone', 'date_joined', 'last_login']
+        fields = ['id', 'username', 'email', 'full_name', 'phone', 'district','date_joined', 'last_login']
     
     def get_full_name(self, obj):
         return obj.get_full_name()
@@ -476,12 +500,25 @@ class AdminUserCreateSerializer(serializers.ModelSerializer):
 class FarmerListSerializer(serializers.ModelSerializer):
     """List farmers (non-admin users)"""
     full_name = serializers.SerializerMethodField()
+    farm_name = serializers.CharField( default='-')
+    region = serializers.CharField( default='-')
+    status = serializers.SerializerMethodField()
+    district = serializers.CharField( read_only=True, default='N/A')  # Add this line
+    geographical_region = serializers.CharField( read_only=True, default='')
     
     class Meta:
         model = User
-        fields = ['id', 'username', 'email', 'full_name', 'phone', 
-                  'farm_name', 'geographical_region', 'is_active', 
-                  'is_email_verified', 'date_joined']
+        fields = [
+            'id', 'username', 'full_name', 'email', 'phone', 
+            'farm_name', 'region','district', 'geographical_region', 'date_joined', 'status'
+        ]
     
     def get_full_name(self, obj):
         return obj.get_full_name()
+    
+    def get_status(self, obj):
+        if not obj.is_active:
+            return 'Inactive'
+        elif not obj.is_email_verified:
+            return 'Pending'
+        return 'Active'

@@ -29,11 +29,11 @@ urlpatterns = [
     
     # Crop Management
     path('crops/', views.CropManagementView.as_view(), name='crops'),
-    path('crops/<int:crop_id>/', views.CropManagementView.as_view(), name='crop-detail'),
+    path('crops/<str:crop_id>/', views.CropManagementView.as_view(), name='crop-detail'),
     path('crops/register/', views.CropRegisterView.as_view(), name='crop-register'),
     
     # Financial Management
-    path('finance/dashboard/', views.FinancialDashboardView.as_view(), name='finance-dashboard'),
+    path('finance/dashboard/', views.FinanceDashboardView.as_view(), name='finance-dashboard'),
     path('finance/transactions/', views.TransactionManagementView.as_view(), name='transactions'),
     path('finance/revenue-by-farmer/', views.RevenueByFarmerView.as_view(), name='revenue-by-farmer'),
     
@@ -42,6 +42,10 @@ urlpatterns = [
     path('livestock/<int:animal_id>/', views.LivestockManagementView.as_view(), name='livestock-detail'),
     path('livestock/breeding-records/', views.BreedingRecordsView.as_view(), name='breeding-records'),
     path('livestock/milk-stats/', views.MilkStatisticsView.as_view(), name='milk-stats'),
+    path('livestock/animal-types/', views.LivestockManagementView.as_view(), {'action': 'get_animal_types'}, name='livestock-animal-types'),
+    path('livestock/<str:animal_id>/', views.LivestockManagementView.as_view(), name='livestock-detail'),
+    path('livestock/', views.LivestockManagementView.as_view(), name='livestock'),
+    
     
     # Notifications
     path('notifications/', views.NotificationManagementView.as_view(), name='notifications'),

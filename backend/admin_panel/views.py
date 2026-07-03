@@ -10,11 +10,14 @@ from django.http import HttpResponse
 from django.core.mail import send_mail
 from django.conf import settings
 import csv
+import uuid
+
 import json
 from openpyxl import Workbook
 
 from django.contrib.auth import get_user_model
 from crops.models import Crop, CropKnowledgeBase
+from finance.serializers import TransactionSerializer
 from livestock.models import Animal, AnimalType, BreedingRecord, HealthRecord, MilkRecord
 from finance.models import Transaction
 from .models import Notification, SystemSetting, AdminLog, Report
@@ -665,7 +668,10 @@ class CropManagementView(APIView):
     """Admin crop management"""
     permission_classes = [IsAdminUser]
     
-    def get(self, request):
+    def get(self, request, crop_id= None):
+        if crop_id:
+            return self.get_detail(request, crop_id )
+        
         crops = Crop.objects.all().order_by('-created_at')
         
         # Search
@@ -687,6 +693,14 @@ class CropManagementView(APIView):
         farmer_id = request.query_params.get('farmer_id')
         if farmer_id:
             crops = crops.filter(farmer_id=farmer_id)
+
+
+        district = request.query_params.get('district')
+        if district:
+            crops = crops.filter(
+                Q(farmer__district__icontains=district) |
+                Q(farmer__farm_district__icontains=district)
+            )
         
         # Pagination
         page = int(request.query_params.get('page', 1))
@@ -696,6 +710,10 @@ class CropManagementView(APIView):
         
         total = crops.count()
         crops_page = crops[start:end]
+        
+        crops_data = CropListAdminSerializer(crops_page, many=True).data
+        for i, crop in enumerate(crops_page):
+            crops_data[i]['district'] = crop.farmer.district or crop.farmer.farm_district or 'N/A'
         
         return Response({
             'crops': CropListAdminSerializer(crops_page, many=True).data,
@@ -709,7 +727,14 @@ class CropManagementView(APIView):
     
     def get_detail(self, request, crop_id):
         try:
-            crop = Crop.objects.get(id=crop_id)
+
+            try:
+                # Try to parse as UUID
+                crop_uuid = uuid.UUID(crop_id)
+                crop = Crop.objects.get(id=crop_uuid)
+            except (ValueError, TypeError):
+                # If not UUID, try as integer
+                crop = Crop.objects.get(id=int(crop_id))
         except Crop.DoesNotExist:
             return Response({'error': 'Crop not found'}, status=status.HTTP_404_NOT_FOUND)
         
@@ -795,50 +820,167 @@ class CropRegisterView(APIView):
 # FINANCIAL MANAGEMENT VIEWS
 # ============================================================
 
-class FinancialDashboardView(APIView):
-    """Complete financial overview for admin"""
+# admin_panel/views.py - Add this class
+
+class FinanceDashboardView(APIView):
+    """Complete financial dashboard for admin"""
     permission_classes = [IsAdminUser]
     
     def get(self, request):
-        # Total revenue and expenses
-        total_income = Transaction.objects.filter(transaction_type__contains='income').aggregate(Sum('amount'))['amount__sum'] or 0
-        total_expense = Transaction.objects.filter(transaction_type__contains='expense').aggregate(Sum('amount'))['amount__sum'] or 0
+        from finance.models import Transaction
+        from django.db.models import Sum, Q
+        from datetime import date, timedelta
+        from collections import defaultdict
         
-        # Current month
-        current_month = timezone.now().month
-        current_year = timezone.now().year
+        user = request.user
+        today = date.today()
         
-        monthly_income = Transaction.objects.filter(
-            transaction_type__contains='income',
-            date__year=current_year,
-            date__month=current_month
-        ).aggregate(Sum('amount'))['amount__sum'] or 0
+        # Get filter parameters
+        year = int(request.query_params.get('year', today.year))
+        month = request.query_params.get('month')
         
-        monthly_expense = Transaction.objects.filter(
-            transaction_type__contains='expense',
-            date__year=current_year,
-            date__month=current_month
-        ).aggregate(Sum('amount'))['amount__sum'] or 0
+        # Base queryset
+        transactions = Transaction.objects.all()
         
-        # Transaction volume
-        transaction_count = Transaction.objects.count()
+        # Apply filters
+        if month:
+            transactions = transactions.filter(date__year=year, date__month=month)
+            period_name = f"{year}-{int(month):02d}"
+            
+            # Get previous month for trend
+            if int(month) == 1:
+                prev_year = year - 1
+                prev_month = 12
+            else:
+                prev_year = year
+                prev_month = int(month) - 1
+            
+            prev_trans = Transaction.objects.filter(
+                date__year=prev_year,
+                date__month=prev_month
+            )
+        else:
+            transactions = transactions.filter(date__year=year)
+            period_name = str(year)
+            
+            # Get previous year for trend
+            prev_trans = Transaction.objects.filter(date__year=year - 1)
         
-        # Expense by category
-        expense_by_category = Transaction.objects.filter(
-            transaction_type__contains='expense'
-        ).values('category').annotate(total=Sum('amount')).order_by('-total')[:5]
+        # Calculate totals
+        total_income = float(transactions.filter(transaction_type__contains='income').aggregate(
+            total=Sum('amount')).get('total') or 0)
         
-        return Response({
+        total_expense = float(transactions.filter(transaction_type__contains='expense').aggregate(
+            total=Sum('amount')).get('total') or 0)
+        
+        net_balance = total_income - total_expense
+        
+        # Calculate trends
+        prev_income = float(prev_trans.filter(transaction_type__contains='income').aggregate(
+            total=Sum('amount')).get('total') or 0)
+        prev_expense = float(prev_trans.filter(transaction_type__contains='expense').aggregate(
+            total=Sum('amount')).get('total') or 0)
+        
+        income_trend = ((total_income - prev_income) / prev_income * 100) if prev_income > 0 else 0
+        expense_trend = ((total_expense - prev_expense) / prev_expense * 100) if prev_expense > 0 else 0
+        balance_trend = income_trend - expense_trend
+        
+        # Income breakdown by category
+        incomes = transactions.filter(transaction_type__contains='income')
+        income_dict = {}
+        for inc in incomes:
+            cat = inc.category or 'Other'
+            amount = float(inc.amount)
+            income_dict[cat] = income_dict.get(cat, 0) + amount
+        
+        income_breakdown = [
+            {
+                'category': k,
+                'amount': v,
+                'percentage': round((v / total_income * 100), 1) if total_income > 0 else 0
+            }
+            for k, v in sorted(income_dict.items(), key=lambda x: x[1], reverse=True)
+        ]
+        
+        # Expense breakdown by category
+        expenses = transactions.filter(transaction_type__contains='expense')
+        expense_dict = {}
+        for exp in expenses:
+            cat = exp.category or 'Other'
+            amount = float(exp.amount)
+            expense_dict[cat] = expense_dict.get(cat, 0) + amount
+        
+        expense_breakdown = [
+            {
+                'category': k,
+                'amount': v,
+                'percentage': round((v / total_expense * 100), 1) if total_expense > 0 else 0
+            }
+            for k, v in sorted(expense_dict.items(), key=lambda x: x[1], reverse=True)
+        ]
+        
+        # Monthly trend for the year
+        monthly_data = []
+        for m in range(1, 13):
+            month_trans = Transaction.objects.filter(
+                date__year=year,
+                date__month=m
+            )
+            month_income = float(month_trans.filter(transaction_type__contains='income').aggregate(
+                total=Sum('amount')).get('total') or 0)
+            month_expense = float(month_trans.filter(transaction_type__contains='expense').aggregate(
+                total=Sum('amount')).get('total') or 0)
+            
+            monthly_data.append({
+                'month': m,
+                'month_name': date(year, m, 1).strftime('%b'),
+                'income': month_income,
+                'expense': month_expense,
+                'profit': month_income - month_expense,
+            })
+        
+        # Crop vs Livestock comparison
+        crop_income = float(Transaction.objects.filter(
+            transaction_type='crop_income'
+        ).aggregate(total=Sum('amount')).get('total') or 0)
+        
+        crop_expense = float(Transaction.objects.filter(
+            transaction_type='crop_expense'
+        ).aggregate(total=Sum('amount')).get('total') or 0)
+        
+        livestock_income = float(Transaction.objects.filter(
+            transaction_type='animal_income'
+        ).aggregate(total=Sum('amount')).get('total') or 0)
+        
+        livestock_expense = float(Transaction.objects.filter(
+            transaction_type='animal_expense'
+        ).aggregate(total=Sum('amount')).get('total') or 0)
+        
+        # Recent transactions
+        recent_transactions = TransactionSerializer(
+            transactions.order_by('-date')[:10], 
+            many=True
+        ).data
+        
+        data = {
+            'period': period_name,
             'total_income': total_income,
             'total_expense': total_expense,
-            'net_profit': total_income - total_expense,
-            'monthly_income': monthly_income,
-            'monthly_expense': monthly_expense,
-            'monthly_profit': monthly_income - monthly_expense,
-            'transaction_volume': transaction_count,
-            'expense_by_category': list(expense_by_category)
-        })
-
+            'net_balance': net_balance,
+            'income_trend': round(income_trend, 1),
+            'expense_trend': round(expense_trend, 1),
+            'balance_trend': round(balance_trend, 1),
+            'recent_transactions': recent_transactions,
+            'income_breakdown': income_breakdown,
+            'expense_breakdown': expense_breakdown,
+            'monthly_trend': monthly_data,
+            'crop_income': crop_income,
+            'crop_expense': crop_expense,
+            'livestock_income': livestock_income,
+            'livestock_expense': livestock_expense,
+        }
+        
+        return Response(data)
 
 class TransactionManagementView(APIView):
     """View all transactions"""
@@ -921,61 +1063,143 @@ class LivestockManagementView(APIView):
     """Admin livestock management"""
     permission_classes = [IsAdminUser]
     
-    def get(self, request):
-        animals = Animal.objects.all().order_by('-created_at')
+    def get(self, request, animal_id=None):
+        """Handle both list and detail GET requests"""
+        print(f"🔍 DEBUG: GET request received, animal_id={animal_id}")
+        print(f"🔍 DEBUG: Query params: {request.query_params}")
         
-        # Filter by animal type
-        animal_type = request.query_params.get('type')
-        if animal_type:
-            animals = animals.filter(animal_type__name=animal_type)
+        if animal_id:
+            return self.get_detail(request, animal_id)
+        return self.get_list(request)
+    
+    def get_list(self, request):
+        """Get list of all animals"""
+        print("🔍 DEBUG: Fetching livestock list")
         
-        # Filter by status
-        status_filter = request.query_params.get('status')
-        if status_filter:
-            animals = animals.filter(status=status_filter)
-        
-        # Filter by farmer
-        farmer_id = request.query_params.get('farmer_id')
-        if farmer_id:
-            animals = animals.filter(farmer_id=farmer_id)
-        
-        # Search
-        search = request.query_params.get('search')
-        if search:
-            animals = animals.filter(
-                Q(name__icontains=search) |
-                Q(tag_number__icontains=search) |
-                Q(farmer__username__icontains=search)
-            )
-        
-        # Pagination
-        page = int(request.query_params.get('page', 1))
-        page_size = int(request.query_params.get('page_size', 20))
-        start = (page - 1) * page_size
-        end = start + page_size
-        
-        total = animals.count()
-        animals_page = animals[start:end]
-        
-        return Response({
-            'livestock': LivestockListAdminSerializer(animals_page, many=True).data,
-            'pagination': {
-                'total': total,
-                'page': page,
-                'page_size': page_size,
-                'total_pages': (total + page_size - 1) // page_size
+        try:
+            animals = Animal.objects.all().order_by('-created_at')
+            print(f"🔍 DEBUG: Total animals found: {animals.count()}")
+            
+            # Filter by animal type
+            animal_type = request.query_params.get('type')
+            if animal_type:
+                animals = animals.filter(animal_type__name__icontains=animal_type)
+                print(f"🔍 DEBUG: After type filter: {animals.count()}")
+            
+            # Filter by status
+            status_filter = request.query_params.get('status')
+            if status_filter:
+                animals = animals.filter(status=status_filter)
+                print(f"🔍 DEBUG: After status filter: {animals.count()}")
+            
+            # Filter by gender
+            gender = request.query_params.get('gender')
+            if gender:
+                animals = animals.filter(gender=gender)
+                print(f"🔍 DEBUG: After gender filter: {animals.count()}")
+            
+            # Filter by farmer
+            farmer_id = request.query_params.get('farmer_id')
+            if farmer_id:
+                animals = animals.filter(farmer_id=farmer_id)
+                print(f"🔍 DEBUG: After farmer filter: {animals.count()}")
+            
+            # Search
+            search = request.query_params.get('search')
+            if search:
+                animals = animals.filter(
+                    Q(name__icontains=search) |
+                    Q(tag_number__icontains=search) |
+                    Q(farmer__username__icontains=search) |
+                    Q(farmer__first_name__icontains=search) |
+                    Q(farmer__last_name__icontains=search)
+                )
+                print(f"🔍 DEBUG: After search filter: {animals.count()}")
+            
+            # Pagination
+            page = int(request.query_params.get('page', 1))
+            page_size = int(request.query_params.get('page_size', 20))
+            start = (page - 1) * page_size
+            end = start + page_size
+            
+            total = animals.count()
+            animals_page = animals[start:end]
+            
+            print(f"🔍 DEBUG: Serializing {animals_page.count()} animals")
+            
+            # Serialize the data
+            serializer = LivestockListAdminSerializer(animals_page, many=True)
+            
+            response_data = {
+                'livestock': serializer.data,
+                'pagination': {
+                    'total': total,
+                    'page': page,
+                    'page_size': page_size,
+                    'total_pages': (total + page_size - 1) // page_size
+                }
             }
-        })
+            
+            return Response(response_data)
+            
+        except Exception as e:
+            print(f"❌ DEBUG: Error in get_list: {str(e)}")
+            import traceback
+            traceback.print_exc()
+            return Response(
+                {'error': str(e)}, 
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )
     
     def get_detail(self, request, animal_id):
+        """Get single animal detail"""
         try:
-            animal = Animal.objects.get(id=animal_id)
+            import uuid
+            try:
+                animal_uuid = uuid.UUID(animal_id)
+                animal = Animal.objects.get(id=animal_uuid)
+            except (ValueError, TypeError):
+                animal = Animal.objects.get(id=int(animal_id))
+        except Animal.DoesNotExist:
+            return Response({'error': 'Animal not found'}, status=status.HTTP_404_NOT_FOUND)
+        except Exception as e:
+            print(f"❌ DEBUG: Error finding animal: {str(e)}")
+            return Response({'error': str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+        
+        try:
+            serializer = AdminLivestockDetailSerializer(animal)
+            return Response(serializer.data)
+        except Exception as e:
+            print(f"❌ DEBUG: Error serializing animal: {str(e)}")
+            import traceback
+            traceback.print_exc()
+            return Response({'error': str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+    
+    def delete(self, request, animal_id):
+        """Delete an animal"""
+        try:
+            import uuid
+            try:
+                animal_uuid = uuid.UUID(animal_id)
+                animal = Animal.objects.get(id=animal_uuid)
+            except (ValueError, TypeError):
+                animal = Animal.objects.get(id=int(animal_id))
         except Animal.DoesNotExist:
             return Response({'error': 'Animal not found'}, status=status.HTTP_404_NOT_FOUND)
         
-        serializer = AdminLivestockDetailSerializer(animal)
-        return Response(serializer.data)
-
+        animal_name = animal.name or animal.tag_number
+        animal.delete()
+        
+        AdminLog.objects.create(
+            admin_user=request.user,
+            action='DELETE',
+            model_name='Livestock',
+            object_id=str(animal_id),
+            object_repr=animal_name,
+            ip_address=request.META.get('REMOTE_ADDR')
+        )
+        
+        return Response({'message': 'Animal deleted successfully'})    
 
 class BreedingRecordsView(APIView):
     """View all breeding records"""
@@ -1192,6 +1416,8 @@ class LivestockTypeManagementView(APIView):
 # REPORT VIEWS
 # ============================================================
 
+# admin_panel/views.py - Ensure ReportGenerationView returns the file correctly
+
 class ReportGenerationView(APIView):
     """Generate and download reports"""
     permission_classes = [IsAdminUser]
@@ -1207,8 +1433,8 @@ class ReportGenerationView(APIView):
         start_date = data['date_range_start']
         end_date = data['date_range_end']
         
-        # Generate report using service
-        report_data = ReportGeneratorService.generate_report(
+        # Generate report using service (returns HttpResponse)
+        response = ReportGeneratorService.generate_report(
             report_type=report_type,
             format=format_type,
             start_date=start_date,
@@ -1217,7 +1443,7 @@ class ReportGenerationView(APIView):
             user=request.user
         )
         
-        return Response(report_data)
+        return response  
 
 
 class ReportHistoryView(APIView):
