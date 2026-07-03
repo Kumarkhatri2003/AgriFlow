@@ -2,4 +2,8 @@ from django.apps import AppConfig
 
 
 class LivestockConfig(AppConfig):
+    default_auto_field = 'django.db.models.BigAutoField'
     name = 'livestock'
+
+    def ready(self):
+        import livestock.signals
