@@ -1,3 +1,5 @@
+# notifications/utils.py
+
 """
 Notification utilities - Functions to send and manage notifications
 """
@@ -18,6 +20,7 @@ def send_notification(
     title_np=None,
     message_np=None,
     action_label_np=None,
+    due_date=None,
 ):
     """
     Create a notification for a farmer.
@@ -49,17 +52,13 @@ def send_notification(
         action_url=action_url,
         action_label=action_label,
         action_label_np=action_label_np,
+        due_date=due_date,
     )
 
 
 def send_bulk_notification(farmers, title, message, notification_type='admin', priority='medium'):
     """
     Send same notification to multiple farmers.
-    
-    Parameters:
-    - farmers: List/QuerySet of User objects
-    - title, message: Notification content
-    - notification_type, priority: Type and priority
     """
     notifications = []
     for farmer in farmers:
@@ -127,31 +126,128 @@ def delete_old_notifications(days=30):
     return count
 
 
+def archive_pending_notifications(farmer, source_id=None, source_type=None, title_icontains=None):
+    """
+    Mark incomplete notifications as completed when source data changes
+    or the related record is removed.
+    """
+    from django.utils import timezone
+
+    qs = Notification.objects.filter(farmer=farmer, is_completed=False)
+    if source_id is not None:
+        qs = qs.filter(source_id=str(source_id))
+    if source_type is not None:
+        qs = qs.filter(source_type=source_type)
+    if title_icontains:
+        qs = qs.filter(title__icontains=title_icontains)
+    return qs.update(is_completed=True, completed_at=timezone.now())
+
+
+def refresh_notification_priorities(farmer=None):
+    """
+    Re-score incomplete notifications from due_date vs today.
+    Called on every notification API fetch so criticality stays current.
+    """
+    from datetime import date
+    from .action_priority import crop_priority_from_days_until, priority_from_days_until
+
+    qs = Notification.objects.filter(is_completed=False, due_date__isnull=False)
+    if farmer is not None:
+        qs = qs.filter(farmer=farmer)
+
+    today = date.today()
+    updated = 0
+    for notif in qs.iterator():
+        days_until = (notif.due_date - today).days
+        if notif.notification_type == 'crop':
+            new_priority = crop_priority_from_days_until(days_until)
+        else:
+            new_priority = priority_from_days_until(days_until)
+        if notif.priority != new_priority:
+            Notification.objects.filter(pk=notif.pk).update(priority=new_priority)
+            updated += 1
+    return updated
+
+
+def trigger_immediate_alerts_for_user(user):
+    """
+    Generate crop + livestock alerts immediately (CRUD-triggered).
+    Does not touch last_reminder_generation so the daily batch still runs.
+    """
+    if not user or not user.is_authenticated:
+        return
+    if not getattr(user, 'is_farmer', False):
+        return
+
+    try:
+        from crops.services.reminder_service import CropReminderService
+        CropReminderService.generate_reminders_for_user(user)
+    except Exception as e:
+        print(f"Error generating crop reminders for {user.username}: {e}")
+
+    try:
+        from livestock.alert_generator import LivestockAlertGenerator
+        LivestockAlertGenerator.generate_all_alerts(farmer=user)
+    except Exception as e:
+        print(f"Error generating livestock alerts for {user.username}: {e}")
+
+    refresh_notification_priorities(farmer=user)
+
+
 def generate_user_alerts_and_reminders_if_needed(user):
     """
     Checks if reminders and alerts have been generated for the user today.
     If not, generates them for both crops and livestock.
+    
+    Uses the last_reminder_generation field from the User model to track
+    when reminders were last generated.
     """
-    if not user or not user.is_authenticated or not hasattr(user, 'is_farmer') or not user.is_farmer:
+    if not user or not user.is_authenticated:
+        return
+        
+    # Only generate for farmers
+    if not hasattr(user, 'is_farmer') or not user.is_farmer:
         return
         
     from datetime import date
     
-    if user.last_reminder_generation != date.today():
-        # Prevent double-triggering by updating the timestamp immediately
-        user.last_reminder_generation = date.today()
-        user.save(update_fields=['last_reminder_generation'])
+    # Check if already generated today
+    if user.last_reminder_generation == date.today():
+        # Already generated today, skip
+        return
+    
+    # Update timestamp
+    user.last_reminder_generation = date.today()
+    user.save(update_fields=['last_reminder_generation'])
+    
+    # 1. Generate crop reminders
+    try:
+        from crops.services.reminder_service import CropReminderService
+        reminders = CropReminderService.generate_reminders_for_user(user)
+        if reminders:
+            try:
+                print(f"[SUCCESS] Generated {len(reminders)} crop reminders for {user.username}")
+            except UnicodeEncodeError:
+                pass
+    except Exception as e:
+        try:
+            print(f"[ERROR] Error generating crop reminders for {user.username}: {e}")
+        except UnicodeEncodeError:
+            pass
         
-        # 1. Generate crop reminders
+    # 2. Generate livestock alerts
+    try:
+        from livestock.alert_generator import LivestockAlertGenerator
+        count = LivestockAlertGenerator.generate_all_alerts(farmer=user)
+        if count:
+            try:
+                print(f"[SUCCESS] Generated {count} livestock alerts for {user.username}")
+            except UnicodeEncodeError:
+                pass
+    except Exception as e:
         try:
-            from crops.services.reminder_service import CropReminderService
-            CropReminderService.generate_reminders_for_user(user)
-        except Exception as e:
-            print(f"Error generating crop reminders for user {user.username}: {e}")
-            
-        # 2. Generate livestock alerts
-        try:
-            from livestock.alert_generator import LivestockAlertGenerator
-            LivestockAlertGenerator.generate_all_alerts(farmer=user)
-        except Exception as e:
-            print(f"Error generating livestock alerts for user {user.username}: {e}")
+            print(f"[ERROR] Error generating livestock alerts for {user.username}: {e}")
+        except UnicodeEncodeError:
+            pass
+
+    refresh_notification_priorities(farmer=user)

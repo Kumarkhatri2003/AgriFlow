@@ -1,3 +1,5 @@
+# notifications/views.py
+
 from rest_framework.views import APIView
 from rest_framework.response import Response
 from rest_framework.permissions import IsAuthenticated
@@ -9,7 +11,8 @@ from .utils import (
     get_all_notifications, 
     get_notifications_by_type,
     mark_all_as_read,
-    generate_user_alerts_and_reminders_if_needed
+    generate_user_alerts_and_reminders_if_needed,
+    refresh_notification_priorities,
 )
 from .i18n import get_request_language, notification_to_dict
 
@@ -19,8 +22,9 @@ class NotificationListView(APIView):
     permission_classes = [IsAuthenticated]
     
     def get(self, request):
-        # Automatically generate notifications for today if needed
+        # Generate new alerts once per day, refresh priority on every fetch
         generate_user_alerts_and_reminders_if_needed(request.user)
+        refresh_notification_priorities(farmer=request.user)
         
         # Get filter parameters
         notification_type = request.query_params.get('type')
@@ -120,3 +124,83 @@ class UnreadCountView(APIView):
             'success': True,
             'unread_count': get_unread_count(request.user)
         })
+
+
+# ==================== FARM ALERTS VIEWS ====================
+
+class GetFarmAlertsView(APIView):
+    """GET /api/notifications/farm-alerts/ - Get all farm alerts (crop + livestock)"""
+    permission_classes = [IsAuthenticated]
+    
+    def get(self, request):
+        status_filter = request.query_params.get('status', 'active')
+
+        # Ensure today's crop/livestock alerts exist, then refresh priority tiers
+        generate_user_alerts_and_reminders_if_needed(request.user)
+        refresh_notification_priorities(farmer=request.user)
+        
+        # Base queryset
+        queryset = Notification.objects.filter(farmer=request.user)
+        
+        # Filter by status
+        if status_filter == 'active':
+            queryset = queryset.filter(is_completed=False)
+        elif status_filter == 'completed':
+            queryset = queryset.filter(is_completed=True)
+        # 'all' returns everything
+        
+        lang = get_request_language(request)
+        
+        crop_alerts = [
+            notification_to_dict(n, lang)
+            for n in queryset.filter(notification_type='crop')
+        ]
+        livestock_alerts = [
+            notification_to_dict(n, lang)
+            for n in queryset.filter(notification_type='livestock')
+        ]
+        
+        return Response({
+            'success': True,
+            'lang': lang,
+            'crop': crop_alerts,
+            'livestock': livestock_alerts,
+        })
+
+
+class MarkNotificationCompletedView(APIView):
+    """POST /api/notifications/{id}/complete/ - Mark notification as completed"""
+    permission_classes = [IsAuthenticated]
+    
+    def post(self, request, notification_id):
+        try:
+            notification = Notification.objects.get(id=notification_id, farmer=request.user)
+            notification.mark_as_completed()
+            return Response({
+                'success': True,
+                'message': 'Notification marked as completed'
+            })
+        except Notification.DoesNotExist:
+            return Response({
+                'success': False,
+                'error': 'Notification not found'
+            }, status=404)
+
+
+class MarkNotificationUncompletedView(APIView):
+    """POST /api/notifications/{id}/uncomplete/ - Mark notification as uncompleted"""
+    permission_classes = [IsAuthenticated]
+    
+    def post(self, request, notification_id):
+        try:
+            notification = Notification.objects.get(id=notification_id, farmer=request.user)
+            notification.mark_as_uncompleted()
+            return Response({
+                'success': True,
+                'message': 'Notification marked as uncompleted'
+            })
+        except Notification.DoesNotExist:
+            return Response({
+                'success': False,
+                'error': 'Notification not found'
+            }, status=404)

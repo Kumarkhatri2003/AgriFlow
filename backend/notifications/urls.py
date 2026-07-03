@@ -1,9 +1,14 @@
+# notifications/urls.py
+
 from django.urls import path
 from .views import (
-    NotificationListView, 
-    NotificationDetailView, 
+    NotificationListView,
+    NotificationDetailView,
     MarkAllReadView,
-    UnreadCountView
+    UnreadCountView,
+    GetFarmAlertsView,
+    MarkNotificationCompletedView,
+    MarkNotificationUncompletedView,
 )
 
 urlpatterns = [
@@ -14,4 +19,11 @@ urlpatterns = [
     
     # Individual notification
     path('<int:notification_id>/', NotificationDetailView.as_view(), name='notification-detail'),
+    
+    # Farm alerts endpoint
+    path('farm-alerts/', GetFarmAlertsView.as_view(), name='farm-alerts'),
+    
+    # Complete/Uncomplete endpoints
+    path('<int:notification_id>/complete/', MarkNotificationCompletedView.as_view(), name='notification-complete'),
+    path('<int:notification_id>/uncomplete/', MarkNotificationUncompletedView.as_view(), name='notification-uncomplete'),
 ]

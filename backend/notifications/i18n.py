@@ -1,103 +1,76 @@
-"""Localized notification API payloads."""
-
-PRIORITY_DISPLAY = {
-    'en': {
-        'critical': 'Critical - Overdue',
-        'urgent': 'Urgent - Today',
-        'high': 'High - 1-2 days',
-        'medium': 'Medium - 3-4 days',
-        'low': 'Low - 5+ days',
-    },
-    'np': {
-        'critical': 'गम्भीर - म्याद नाघेको',
-        'urgent': 'अत्यावश्यक - आज',
-        'high': 'उच्च - १-२ दिन',
-        'medium': 'मध्यम - ३-४ दिन',
-        'low': 'न्यून - ५+ दिन',
-    },
-}
-
-TYPE_DISPLAY = {
-    'en': {
-        'livestock': 'Livestock Alert',
-        'crop': 'Crop Alert',
-        'weather': 'Weather Alert',
-        'admin': 'Admin Announcement',
-    },
-    'np': {
-        'livestock': 'पशुपालन सतर्कता',
-        'crop': 'बाली सतर्कता',
-        'weather': 'मौसम सतर्कता',
-        'admin': 'प्रशासक घोषणा',
-    },
-}
+# notifications/i18n.py
 
 ACTION_LABELS = {
     'en': {
         'view_crop': 'View Crop',
         'view_animal': 'View Animal',
+        'view_notification': 'View Details',
+        'mark_read': 'Mark as Read',
+        'mark_complete': 'Mark as Complete',
+        'dismiss': 'Dismiss',
     },
     'np': {
         'view_crop': 'बाली हेर्नुहोस्',
-        'view_animal': 'जनावर हेर्नुहोस्',
-    },
+        'view_animal': 'पशु हेर्नुहोस्',
+        'view_notification': 'विवरण हेर्नुहोस्',
+        'mark_read': 'पढेको चिन्ह लगाउनुहोस्',
+        'mark_complete': 'पूरा भएको चिन्ह लगाउनुहोस्',
+        'dismiss': 'हटाउनुहोस्',
+    }
 }
 
 
-def normalize_lang(lang):
-    if not lang:
-        return 'en'
-    lang = str(lang).lower().strip()
-    if lang in ('np', 'ne', 'nepali', 'ne-np'):
-        return 'np'
-    return 'en'
-
-
 def get_request_language(request):
-    if request is None:
-        return 'en'
-    return normalize_lang(
-        request.query_params.get('lang')
-        or request.headers.get('Accept-Language', '').split(',')[0].split('-')[0]
-    )
+    """Get language from request"""
+    lang = request.query_params.get('lang', 'en')
+    if lang not in ['en', 'np']:
+        lang = 'en'
+    return lang
 
 
-def pick_localized(primary, secondary, lang):
-    """Use Nepali when requested and available; otherwise English."""
-    if lang == 'np' and secondary:
-        return secondary
-    return primary or secondary or ''
+def get_localized_text(obj, field_name, lang='en'):
+    """
+    Get localized text from object.
+    If lang is 'np', returns field_name_np if exists, else field_name.
+    """
+    np_field = f"{field_name}_np"
+    if lang == 'np' and hasattr(obj, np_field):
+        return getattr(obj, np_field) or getattr(obj, field_name)
+    return getattr(obj, field_name)
 
 
 def notification_to_dict(notification, lang='en'):
-    lang = normalize_lang(lang)
-    title = pick_localized(notification.title, getattr(notification, 'title_np', None), lang)
-    message = pick_localized(notification.message, getattr(notification, 'message_np', None), lang)
-    action_label = pick_localized(
-        notification.action_label,
-        getattr(notification, 'action_label_np', None),
-        lang,
-    )
-    priority = notification.priority
-    ntype = notification.notification_type
+    """
+    Convert notification to dictionary with localized content.
+    """
+    if lang == 'np':
+        title = notification.title_np or notification.title
+        message = notification.message_np or notification.message
+        action_label = notification.action_label_np or notification.action_label
+    else:
+        title = notification.title
+        message = notification.message
+        action_label = notification.action_label
 
+    due_date = notification.due_date
+    if due_date is None and notification.created_at:
+        due_date = notification.created_at.date()
+    
     return {
         'id': notification.id,
         'title': title,
         'message': message,
-        'priority': priority,
-        'priority_display': PRIORITY_DISPLAY.get(lang, PRIORITY_DISPLAY['en']).get(
-            priority, priority
-        ),
-        'type': ntype,
-        'type_display': TYPE_DISPLAY.get(lang, TYPE_DISPLAY['en']).get(ntype, ntype),
+        'priority': notification.priority,
+        'priority_display': notification.get_priority_display(),
+        'notification_type': notification.notification_type,
+        'type': notification.notification_type,
+        'type_display': notification.get_notification_type_display(),
         'is_read': notification.is_read,
         'is_completed': notification.is_completed,
-        'completed_at': notification.completed_at.isoformat() if notification.completed_at else None,
-        'created_at': notification.created_at.isoformat(),
+        'created_at': notification.created_at,
+        'due_date': due_date.isoformat() if due_date else None,
         'action_url': notification.action_url,
         'action_label': action_label,
         'source_id': notification.source_id,
         'source_type': notification.source_type,
-        'lang': lang,
     }
