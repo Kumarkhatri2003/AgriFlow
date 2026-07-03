@@ -3,8 +3,8 @@ from django.contrib.auth import get_user_model
 import uuid
 
 from django.conf import settings
-
 User = get_user_model()
+
 
 class Crop(models.Model):
     """Main crop model"""
@@ -44,6 +44,11 @@ class Crop(models.Model):
 
     growth_stage = models.CharField(max_length=50, choices=GROWTH_STAGES, default='seeding')
 
+    growth_stage_manual_override = models.BooleanField(
+        default=False,
+        help_text="If True, growth_stage was manually set by the user and will no longer be auto-calculated"
+    )
+
     # Irrigation (simplified)
     is_irrigated = models.BooleanField(default=False, help_text="Is this crop irrigated?")
 
@@ -63,25 +68,26 @@ class Crop(models.Model):
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 
-    # =============FINANCIAL CALCULATIONS=====================
+    # ==================== FINANCIAL CALCULATIONS ====================
+
     @property
     def total_fertilizer_cost(self):
         """Sum of all fertilizer costs"""
         from django.db.models import Sum
         return self.fertilizers.aggregate(total=Sum('cost'))['total'] or 0
-    
+
     @property
     def total_pesticide_cost(self):
         """Sum of all pesticide costs"""
         from django.db.models import Sum
         return self.pesticides.aggregate(total=Sum('cost'))['total'] or 0
-    
+
     @property
     def total_labor_cost(self):
         """Sum of all labor costs"""
         from django.db.models import Sum
         return self.labour_records.aggregate(total=Sum('total_cost'))['total'] or 0
-    
+
     @property
     def total_other_expense(self):
         """Sum of all other expenses (labor, rent, seeds, etc.)"""
@@ -91,7 +97,12 @@ class Crop(models.Model):
     @property
     def total_expense(self):
         """Total of ALL expenses"""
-        return self.total_fertilizer_cost + self.total_pesticide_cost +self.total_labor_cost + self.total_other_expense
+        return (
+            self.total_fertilizer_cost
+            + self.total_pesticide_cost
+            + self.total_labor_cost
+            + self.total_other_expense
+        )
 
     @property
     def total_income(self):
@@ -107,41 +118,52 @@ class Crop(models.Model):
     def __str__(self):
         return f"{self.name} - {self.field_name}"
 
+    # ==================== GROWTH STAGE LOGIC ====================
+
     def calculate_growth_stage(self):
-        """Auto-calculate the growth stage based on the planting date and crop configurations"""
+        """
+        Auto-calculate the growth stage based on the planting date and
+        crop configurations. Does NOT check the manual override flag —
+        callers (update_growth_stage / save) are responsible for that.
+        """
         if not self.planting_date:
             return 'seeding'
-            
+
         from crops.services.config_matcher import CropConfigMatcher
         from datetime import date, datetime
-        
+
         planting_date = self.planting_date
         if isinstance(planting_date, str):
             try:
                 planting_date = datetime.strptime(planting_date, '%Y-%m-%d').date()
             except ValueError:
                 return 'seeding'
-        
+
         # Get farmer's region
-        farmer_region = self.farmer.geographical_region if hasattr(self.farmer, 'geographical_region') else None
-        
-        # Find matching config
-        config, match_strategy = CropConfigMatcher.find_best_match(
-            crop_name=self.name,
-            variety=self.variety if self.variety else None,
-            region=farmer_region,
-            planting_date=planting_date
-        )
-        
-        if not config:
+        farmer_region = getattr(self.farmer, 'geographical_region', None)
+
+        # Find matching config - wrap in try-except to handle any errors
+        try:
+            config, match_strategy = CropConfigMatcher.find_best_match(
+                crop_name=self.name,
+                variety=self.variety if self.variety else None,
+                region=farmer_region,
+                planting_date=planting_date
+            )
+        except Exception:
+            # If any error occurs (like MultipleObjectsReturned), just return current stage
             return self.growth_stage
-            
+
+        if not config:
+            # No config found - this is a custom crop (user selected "Other")
+            return self.growth_stage if self.growth_stage else 'seeding'
+
         days_since = (date.today() - planting_date).days
         if days_since < 0:
             days_since = 0
-            
+
         stage_name = config.get_stage_name(days_since)
-        
+
         # Map CropTypeConfig stage name to Crop growth stage choice
         mapping = {
             'germination': 'seeding',
@@ -153,26 +175,123 @@ class Crop(models.Model):
             'harvest': 'harvest',
             'completed': 'harvest',
         }
-        
+
         return mapping.get(stage_name, 'seeding')
 
     def update_growth_stage(self, save=True):
-        """Calculate and update the growth stage of the crop"""
-        new_stage = self.calculate_growth_stage()
+        """
+        Calculate and update the growth stage of the crop.
+        No-op if the user has manually overridden the stage — once
+        growth_stage_manual_override is True this never runs again.
+        """
+        if self.growth_stage_manual_override:
+            return self.growth_stage
+
+        try:
+            new_stage = self.calculate_growth_stage()
+        except Exception:
+            # If any error occurs, don't break the caller
+            return self.growth_stage
+
         if self.growth_stage != new_stage:
             self.growth_stage = new_stage
             if save:
                 self.save(update_fields=['growth_stage'])
-        return new_stage
+
+        return self.growth_stage
+
+    def set_manual_growth_stage(self, stage, save=True):
+        """
+        Explicitly called when the user manually sets the growth stage
+        (e.g. from the serializer). Locks out auto-calculation permanently
+        for this crop.
+        """
+        self.growth_stage = stage
+        self.growth_stage_manual_override = True
+        if save:
+            self.save(update_fields=['growth_stage', 'growth_stage_manual_override'])
+        return self.growth_stage
+
+    def reset_growth_stage_to_auto(self, save=True):
+        """
+        Optional escape hatch: turns auto-calculation back on and
+        immediately recalculates. Not called anywhere by default.
+        """
+        self.growth_stage_manual_override = False
+        if save:
+            self.save(update_fields=['growth_stage_manual_override'])
+        return self.update_growth_stage(save=save)
 
     def save(self, *args, **kwargs):
-        # Auto-calculate growth stage before saving
-        if not kwargs.get('update_fields') or 'growth_stage' in kwargs.get('update_fields'):
-            self.growth_stage = self.calculate_growth_stage()
+        from datetime import date, timedelta
+        
+        # 1. Detect if planting date has changed
+        planting_date_changed = False
+        if self.pk:
+            try:
+                original = Crop.objects.get(pk=self.pk)
+                if original.planting_date != self.planting_date:
+                    planting_date_changed = True
+                    self.growth_stage_manual_override = False
+            except Crop.DoesNotExist:
+                pass
+
+        # 2. Determine expected harvest date for auto-harvest logic
+        expected_harvest = self.expected_harvest_date
+        if not expected_harvest and self.planting_date:
+            from crops.services.config_matcher import CropConfigMatcher
+            farmer_region = getattr(self.farmer, 'geographical_region', None)
+            try:
+                config, _ = CropConfigMatcher.find_best_match(
+                    crop_name=self.name,
+                    variety=self.variety if self.variety else None,
+                    region=farmer_region,
+                    planting_date=self.planting_date
+                )
+                if config:
+                    expected_harvest = self.planting_date + timedelta(days=config.total_growing_days)
+            except Exception:
+                pass
+
+        # 3. Calculate status and growth stage
+        modified_fields = set()
+        
+        # Check if the system date has passed the expected harvest date
+        if expected_harvest and date.today() > expected_harvest:
+            if self.status != 'harvested':
+                self.status = 'harvested'
+                modified_fields.add('status')
+            if self.growth_stage != 'harvest':
+                self.growth_stage = 'harvest'
+                modified_fields.add('growth_stage')
+        else:
+            # Standard auto-calculate growth stage if not manually overridden
+            if not self.growth_stage_manual_override:
+                try:
+                    new_stage = self.calculate_growth_stage()
+                    if self.growth_stage != new_stage:
+                        self.growth_stage = new_stage
+                        modified_fields.add('growth_stage')
+                except Exception:
+                    pass
+
+        if planting_date_changed:
+            modified_fields.add('growth_stage_manual_override')
+
+        # 4. Handle update_fields if passed
+        update_fields = kwargs.get('update_fields')
+        if update_fields is not None:
+            update_fields = set(update_fields)
+            # If we changed any fields, ensure they are written to the database
+            for field in modified_fields:
+                update_fields.add(field)
+            kwargs['update_fields'] = list(update_fields)
+
         super().save(*args, **kwargs)
 
     class Meta:
         ordering = ['-created_at']
+   
     
 
 

@@ -204,10 +204,73 @@ class CropAutoGrowthStageTests(TestCase):
         db_crop = Crop.objects.get(id=crop.id)
         self.assertEqual(db_crop.growth_stage, 'flowering')
 
+    def test_planting_date_update_resets_manual_override_and_recalculates(self):
+        """Test that updating the planting date resets manual override and recalculates stage"""
+        today = date.today()
+        crop = Crop.objects.create(
+            farmer=self.user,
+            name='Paddy',
+            variety='Basmati',
+            field_name='West Field',
+            field_area=1.0,
+            planting_date=today
+        )
+        self.assertEqual(crop.growth_stage, 'seeding')
+        self.assertFalse(crop.growth_stage_manual_override)
+        
+        # Set manual stage to flowering
+        crop.set_manual_growth_stage('flowering')
+        self.assertEqual(crop.growth_stage, 'flowering')
+        self.assertTrue(crop.growth_stage_manual_override)
+        
+        # Update planting date to 20 days ago (vegetative) and save
+        crop.planting_date = today - timedelta(days=20)
+        crop.save()
+        
+        # Verify override is reset and stage is recalculated
+        self.assertFalse(crop.growth_stage_manual_override)
+        self.assertEqual(crop.growth_stage, 'vegetative')
+
+    def test_auto_harvest_when_system_date_exceeds_expected_harvest(self):
+        """Test that a crop is marked as harvested if expected_harvest_date is in the past"""
+        today = date.today()
+        crop = Crop.objects.create(
+            farmer=self.user,
+            name='Paddy',
+            variety='Basmati',
+            field_name='West Field',
+            field_area=1.0,
+            planting_date=today - timedelta(days=30),
+            expected_harvest_date=today - timedelta(days=1)
+        )
+        self.assertEqual(crop.status, 'harvested')
+        self.assertEqual(crop.growth_stage, 'harvest')
+
+    def test_auto_harvest_when_system_date_exceeds_calculated_harvest(self):
+        """Test that a crop is marked as harvested if calculated harvest date is in the past"""
+        today = date.today()
+        # Paddy config total_growing_days=120. Planted 125 days ago.
+        crop = Crop.objects.create(
+            farmer=self.user,
+            name='Paddy',
+            variety='Basmati',
+            field_name='West Field',
+            field_area=1.0,
+            planting_date=today - timedelta(days=125)
+        )
+        self.assertEqual(crop.status, 'harvested')
+        self.assertEqual(crop.growth_stage, 'harvest')
+
 
 class CropReminderAdvanceTests(TestCase):
     
     def setUp(self):
+        # Disconnect signals to prevent auto-reminders during test crop creation
+        from django.db.models.signals import post_save, pre_save
+        from crops.signals import crop_created_or_updated, crop_status_change_handler
+        post_save.disconnect(crop_created_or_updated, sender=Crop)
+        pre_save.disconnect(crop_status_change_handler, sender=Crop)
+
         # Create a test user
         self.user = User.objects.create_user(
             username='testfarmer2',
@@ -246,6 +309,11 @@ class CropReminderAdvanceTests(TestCase):
             day_offset=10,
             order=1
         )
+    def tearDown(self):
+        from django.db.models.signals import post_save, pre_save
+        from crops.signals import crop_created_or_updated, crop_status_change_handler
+        post_save.connect(crop_created_or_updated, sender=Crop)
+        pre_save.connect(crop_status_change_handler, sender=Crop)
 
     def test_7_days_advance_reminder_generation(self):
         """Test that an advance reminder triggers exactly 7 days before scheduled day_offset"""

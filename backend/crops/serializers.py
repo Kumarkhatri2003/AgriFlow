@@ -211,7 +211,7 @@ class CropSerializer(serializers.ModelSerializer):
             'name', 'name_np', 'variety',
             'field_name', 'field_area', 'area_unit', 'area_unit_display',
             'planting_date', 'expected_harvest_date',
-            'growth_stage', 'growth_stage_display',
+            'growth_stage', 'growth_stage_display','growth_stage_manual_override',
             'is_irrigated', 'soil_type',
             'status', 'status_display',
             'notes', 'created_at', 'updated_at',
@@ -223,7 +223,109 @@ class CropSerializer(serializers.ModelSerializer):
             'total_fertilizer_cost', 'total_pesticide_cost', 'total_other_expense',
             'total_expense', 'total_income', 'net_profit', 'total_labor_cost'
         ]
-        read_only_fields = ['id', 'farmer', 'created_at', 'updated_at']
+        read_only_fields = ['id', 'farmer', 'created_at', 'updated_at','growth_stage_manual_override']
+    
+    # ========== ADD THESE VALIDATION METHODS ==========
+    
+    def update(self, instance, validated_data):
+        """Handle manual growth_stage updates with persistent lock"""
+        # Detect an explicit user edit to growth_stage
+        new_stage = validated_data.pop('growth_stage', None)
+
+        # Update all other fields first
+        instance = super().update(instance, validated_data)
+
+        # If growth_stage was provided, lock it permanently
+        if new_stage is not None:
+            # Even if the value is the same, this still counts as a manual override
+            instance.set_manual_growth_stage(new_stage)
+
+        return instance
+    
+    def validate_name(self, value):
+        """
+        Validate crop name - allows any valid crop name
+        (including custom names not in CropTypeConfig)
+        """
+        if not value or not value.strip():
+            raise serializers.ValidationError("Crop name is required")
+        
+        if len(value) < 2:
+            raise serializers.ValidationError("Crop name must be at least 2 characters")
+        
+        if len(value) > 100:
+            raise serializers.ValidationError("Crop name must be less than 100 characters")
+        
+        return value.strip()
+    
+    def validate_variety(self, value):
+        """Validate variety - optional field"""
+        if value and len(value) > 100:
+            raise serializers.ValidationError("Variety name must be less than 100 characters")
+        return value
+    
+    def validate_field_name(self, value):
+        """Validate field name"""
+        if not value or not value.strip():
+            raise serializers.ValidationError("Field name is required")
+        
+        if len(value) < 2:
+            raise serializers.ValidationError("Field name must be at least 2 characters")
+        
+        if len(value) > 100:
+            raise serializers.ValidationError("Field name must be less than 100 characters")
+        
+        return value.strip()
+    
+    def validate_field_area(self, value):
+        """Validate field area"""
+        if value is None:
+            raise serializers.ValidationError("Field area is required")
+        
+        if value <= 0:
+            raise serializers.ValidationError("Field area must be greater than 0")
+        
+        if value > 10000:
+            raise serializers.ValidationError("Field area must be less than 10000")
+        
+        return value
+    
+    def validate_planting_date(self, value):
+        """Validate planting date"""
+        from datetime import date
+        
+        if not value:
+            raise serializers.ValidationError("Planting date is required")
+        
+        if value > date.today():
+            raise serializers.ValidationError("Planting date cannot be in the future")
+        
+        return value
+    
+    def validate_expected_harvest_date(self, value):
+        """Validate expected harvest date"""
+        from datetime import date
+        
+        if value and value < date.today():
+            raise serializers.ValidationError("Expected harvest date cannot be in the past")
+        
+        return value
+    
+    def validate(self, data):
+        """
+        Cross-field validation
+        """
+        # If expected_harvest_date is provided, ensure it's after planting_date
+        planting_date = data.get('planting_date')
+        expected_harvest_date = data.get('expected_harvest_date')
+        
+        if planting_date and expected_harvest_date:
+            if expected_harvest_date <= planting_date:
+                raise serializers.ValidationError({
+                    'expected_harvest_date': 'Expected harvest date must be after planting date'
+                })
+        
+        return data
 
 
 # ==================== CREATE/UPDATE SERIALIZERS ====================

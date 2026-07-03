@@ -1,3 +1,5 @@
+# crops/management/commands/generate_crop_reminders.py
+
 from django.core.management.base import BaseCommand
 from crops.services.reminder_service import CropReminderService
 
@@ -22,26 +24,26 @@ class Command(BaseCommand):
                 crop = Crop.objects.get(id=options['crop_id'], status='active')
                 reminders = CropReminderService.generate_reminders_for_crop(crop)
                 self.stdout.write(self.style.SUCCESS(
-                    f"\nGenerated {len(reminders)} reminders for {crop.name}"
+                    f"\n✅ Generated {len(reminders)} reminders for {crop.name}"
                 ))
             except Crop.DoesNotExist:
                 self.stdout.write(self.style.ERROR(f"Crop {options['crop_id']} not found"))
         else:
             results = CropReminderService.generate_reminders_for_all_crops()
             
-            self.stdout.write(f"\nSummary:")
-            self.stdout.write(f"   * Active crops: {results['total_crops']}")
-            self.stdout.write(f"   * Reminders generated: {results['total_reminders']}")
+            self.stdout.write(f"\n📊 Summary:")
+            self.stdout.write(f"   • Active crops: {results['total_crops']}")
+            self.stdout.write(f"   • Reminders generated: {results['total_reminders']}")
             
             if results['details']:
-                self.stdout.write(f"\nDetails:")
+                self.stdout.write(f"\n📋 Details:")
                 for detail in results['details']:
                     self.stdout.write(
                         self.style.SUCCESS(
-                            f"   - {detail['crop_name']} ({detail['farmer']}): {detail['reminders']} reminders"
+                            f"   ✓ {detail['crop_name']} ({detail['farmer']}): {detail['reminders']} reminders"
                         )
                     )
             else:
                 self.stdout.write(self.style.WARNING("\n   No reminders generated today"))
         
-        self.stdout.write("\nDone!")
+        self.stdout.write("\n✅ Done!")

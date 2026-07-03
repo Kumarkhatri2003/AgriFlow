@@ -70,6 +70,17 @@ class CropDetailView(generics.RetrieveUpdateDestroyAPIView):
         serializer = self.get_serializer(instance)
         return Response(serializer.data)
 
+    def update(self, request, *args, **kwargs):
+        partial = kwargs.pop('partial', False)
+        instance = self.get_object()
+        serializer = self.get_serializer(instance, data=request.data, partial=partial)
+        serializer.is_valid(raise_exception=True)
+        self.perform_update(serializer)
+        updated = serializer.instance
+        if updated.status == 'active':
+            updated.update_growth_stage(save=True)
+        return Response(self.get_serializer(updated).data)
+
 
 # ==================== FERTILIZER VIEWS ====================
 
@@ -956,4 +967,162 @@ class CropReminderStatsView(generics.GenericAPIView):
                 'critical': critical_count,
                 'warning': warning_count
             }
+        })
+        
+class CropVarietiesView(generics.GenericAPIView):
+    """
+    GET /api/crops/varieties/?crop_name=Paddy
+    Get all varieties for a specific crop from CropTypeConfig
+    """
+    permission_classes = [IsAuthenticated]
+    
+    def get(self, request):
+        crop_name = request.query_params.get('crop_name')
+        
+        if not crop_name:
+            return Response({
+                'success': False,
+                'error': 'crop_name parameter is required'
+            }, status=status.HTTP_400_BAD_REQUEST)
+        
+        # Get all distinct varieties for this crop
+        varieties = CropTypeConfig.objects.filter(
+            crop_name__iexact=crop_name,
+            is_active=True
+        ).exclude(variety='').values_list('variety', flat=True).distinct()
+        
+        # Also get regions and seasons for this crop
+        regions = CropTypeConfig.objects.filter(
+            crop_name__iexact=crop_name,
+            is_active=True
+        ).exclude(region__isnull=True).values_list('region', flat=True).distinct()
+        
+        seasons = CropTypeConfig.objects.filter(
+            crop_name__iexact=crop_name,
+            is_active=True
+        ).exclude(season__isnull=True).values_list('season', flat=True).distinct()
+        
+        # Get region display names
+        region_display_map = dict(CropTypeConfig.REGION_CHOICES)
+        region_displays = [region_display_map.get(r, r) for r in regions if r]
+        
+        # Get season display names
+        season_display_map = dict(CropTypeConfig.SEASON_CHOICES)
+        season_displays = [season_display_map.get(s, s) for s in seasons if s]
+        
+        return Response({
+            'success': True,
+            'crop_name': crop_name,
+            'varieties': list(varieties),
+            'regions': list(regions),
+            'region_displays': region_displays,
+            'seasons': list(seasons),
+            'season_displays': season_displays,
+            'has_configs': CropTypeConfig.objects.filter(crop_name__iexact=crop_name, is_active=True).exists()
+        })
+        
+# crops/views.py - Make sure this view returns varieties correctly
+
+class AvailableCropsView(generics.GenericAPIView):
+    """
+    GET /api/crops/available-crops/
+    Get list of available crops with their varieties, regions, seasons
+    """
+    permission_classes = [IsAuthenticated]
+    
+    def get(self, request):
+        # Get unique crop names from CropTypeConfig
+        crops = CropTypeConfig.objects.filter(is_active=True).values('crop_name').distinct().order_by('crop_name')
+        
+        result = []
+        for crop in crops:
+            crop_name = crop['crop_name']
+            
+            # Get all configs for this crop
+            configs = CropTypeConfig.objects.filter(crop_name=crop_name, is_active=True)
+            
+            # Extract UNIQUE values (using set to remove duplicates)
+            varieties = list(set(configs.exclude(variety='').values_list('variety', flat=True).distinct()))
+            regions = list(set(configs.values_list('region', flat=True).distinct()))
+            seasons = list(set(configs.exclude(season__isnull=True).values_list('season', flat=True).distinct()))
+            
+            # Remove None/empty values
+            regions = [r for r in regions if r]
+            seasons = [s for s in seasons if s]
+            
+            # Get region display names (unique)
+            region_display_map = dict(CropTypeConfig.REGION_CHOICES)
+            region_displays = list(set([region_display_map.get(r, r) for r in regions]))
+            
+            # Get season display names (unique)
+            season_display_map = dict(CropTypeConfig.SEASON_CHOICES)
+            season_displays = list(set([season_display_map.get(s, s) for s in seasons]))
+            
+            result.append({
+                'crop_name': crop_name,
+                'varieties': varieties,
+                'regions': regions,
+                'region_displays': region_displays,
+                'seasons': seasons,
+                'season_displays': season_displays,
+                'has_config': True
+            })
+        
+        return Response({
+            'success': True,
+            'crops': result,
+            'total': len(result)
+        })
+        
+        
+        
+# crops/views.py - Update CropVarietiesView
+
+class CropVarietiesView(generics.GenericAPIView):
+    """
+    GET /api/crops/crop-varieties/?crop_name=Paddy
+    Get all varieties, regions, seasons for a specific crop (UNIQUE values)
+    """
+    permission_classes = [IsAuthenticated]
+    
+    def get(self, request):
+        crop_name = request.query_params.get('crop_name')
+        
+        if not crop_name:
+            return Response({
+                'success': False,
+                'error': 'crop_name parameter is required'
+            }, status=status.HTTP_400_BAD_REQUEST)
+        
+        # Get all configs for this crop
+        configs = CropTypeConfig.objects.filter(
+            crop_name__iexact=crop_name,
+            is_active=True
+        )
+        
+        # Extract UNIQUE values (using set to remove duplicates)
+        varieties = list(set(configs.exclude(variety='').values_list('variety', flat=True).distinct()))
+        regions = list(set(configs.values_list('region', flat=True).distinct()))
+        seasons = list(set(configs.exclude(season__isnull=True).values_list('season', flat=True).distinct()))
+        
+        # Remove None/empty values
+        regions = [r for r in regions if r]
+        seasons = [s for s in seasons if s]
+        
+        # Get display names (unique mapping)
+        region_display_map = dict(CropTypeConfig.REGION_CHOICES)
+        region_displays = list(set([region_display_map.get(r, r) for r in regions]))
+        
+        season_display_map = dict(CropTypeConfig.SEASON_CHOICES)
+        season_displays = list(set([season_display_map.get(s, s) for s in seasons]))
+        
+        return Response({
+            'success': True,
+            'crop_name': crop_name,
+            'varieties': varieties,
+            'regions': regions,
+            'region_displays': region_displays,
+            'seasons': seasons,
+            'season_displays': season_displays,
+            'has_configs': configs.exists()
         })
