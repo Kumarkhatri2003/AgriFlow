@@ -9,3 +9,4 @@ reportlab==4.5.0
 Requests==2.34.2
 psycopg2-binary
 django-cors-headers
+django-apscheduler

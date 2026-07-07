@@ -393,7 +393,7 @@ def insert_activity_rules():
         # ==================== PADDY (RICE) SPECIFIC ACTIVITIES ====================
         if crop_name == 'Paddy':
             activities.extend([
-                # Vegetative Stage (Post-planting)
+                # Vegetative Stage (Post-planting) - 5 activities
                 {
                     'crop_config': config,
                     'growth_stage': 'vegetative',
@@ -440,11 +440,11 @@ def insert_activity_rules():
                     'title': 'Pest Monitoring',
                     'description': 'Check for pests and diseases',
                     'measurements': '',
-                    'target_pest': 'Rice Borer, Leaf folder',
+                    'target_pest': 'Rice Borer, Leaf folder, Gall midge',
                     'day_offset': 5,
                     'order': 5
                 },
-                # Flowering Stage
+                # Flowering Stage - 5 activities
                 {
                     'crop_config': config,
                     'growth_stage': 'flowering',
@@ -475,7 +475,27 @@ def insert_activity_rules():
                     'day_offset': 0,
                     'order': 3
                 },
-                # Maturation Stage
+                {
+                    'crop_config': config,
+                    'growth_stage': 'flowering',
+                    'title': 'Foliar Spray',
+                    'description': 'Apply micronutrients for better grain filling',
+                    'measurements': 'ZnSO4: 0.5%, FeSO4: 0.5%',
+                    'target_pest': '',
+                    'day_offset': 3,
+                    'order': 4
+                },
+                {
+                    'crop_config': config,
+                    'growth_stage': 'flowering',
+                    'title': 'Water Management',
+                    'description': 'Maintain shallow water level during flowering',
+                    'measurements': 'Keep 5-7 cm water',
+                    'target_pest': '',
+                    'day_offset': 0,
+                    'order': 5
+                },
+                # Maturation Stage - 5 activities
                 {
                     'crop_config': config,
                     'growth_stage': 'maturation',
@@ -496,7 +516,37 @@ def insert_activity_rules():
                     'day_offset': 10,
                     'order': 2
                 },
-                # Harvest Stage
+                {
+                    'crop_config': config,
+                    'growth_stage': 'maturation',
+                    'title': 'Fungal Disease Control',
+                    'description': 'Apply fungicide for grain discoloration',
+                    'measurements': '',
+                    'target_pest': 'Grain discoloration, False smut',
+                    'day_offset': 5,
+                    'order': 3
+                },
+                {
+                    'crop_config': config,
+                    'growth_stage': 'maturation',
+                    'title': 'Nutrient Management',
+                    'description': 'Apply potassium for better grain quality',
+                    'measurements': 'Potash: 1.5 Kg/Ropani',
+                    'target_pest': '',
+                    'day_offset': 2,
+                    'order': 4
+                },
+                {
+                    'crop_config': config,
+                    'growth_stage': 'maturation',
+                    'title': 'Field Draining',
+                    'description': 'Drain field completely for uniform ripening',
+                    'measurements': 'Complete drainage 7 days before harvest',
+                    'target_pest': '',
+                    'day_offset': 12,
+                    'order': 5
+                },
+                # Harvest Stage - 5 activities
                 {
                     'crop_config': config,
                     'growth_stage': 'harvest',
@@ -518,12 +568,42 @@ def insert_activity_rules():
                     'day_offset': 0,
                     'order': 2
                 },
+                {
+                    'crop_config': config,
+                    'growth_stage': 'harvest',
+                    'title': 'Threshing',
+                    'description': 'Separate grains from straw',
+                    'measurements': '',
+                    'target_pest': '',
+                    'day_offset': 1,
+                    'order': 3
+                },
+                {
+                    'crop_config': config,
+                    'growth_stage': 'harvest',
+                    'title': 'Winnowing',
+                    'description': 'Clean grains for storage',
+                    'measurements': '',
+                    'target_pest': '',
+                    'day_offset': 2,
+                    'order': 4
+                },
+                {
+                    'crop_config': config,
+                    'growth_stage': 'harvest',
+                    'title': 'Storage Pest Control',
+                    'description': 'Apply safe storage measures',
+                    'measurements': '',
+                    'target_pest': 'Rice weevil, Grain moth',
+                    'day_offset': 3,
+                    'order': 5
+                },
             ])
         
         # ==================== MAIZE SPECIFIC ACTIVITIES ====================
         elif crop_name == 'Maize':
             activities.extend([
-                # Vegetative Stage
+                # Vegetative Stage - 5 activities
                 {
                     'crop_config': config,
                     'growth_stage': 'vegetative',
@@ -560,11 +640,21 @@ def insert_activity_rules():
                     'title': 'Pest Monitoring',
                     'description': 'Check for stem borer',
                     'measurements': '',
-                    'target_pest': 'Maize Stem Borer, Armyworm',
+                    'target_pest': 'Maize Stem Borer, Armyworm, Cutworm',
                     'day_offset': 5,
                     'order': 4
                 },
-                # Flowering Stage
+                {
+                    'crop_config': config,
+                    'growth_stage': 'vegetative',
+                    'title': 'Irrigation',
+                    'description': 'First irrigation at 3-4 leaf stage',
+                    'measurements': '',
+                    'target_pest': '',
+                    'day_offset': 7,
+                    'order': 5
+                },
+                # Flowering Stage - 5 activities
                 {
                     'crop_config': config,
                     'growth_stage': 'flowering',
@@ -581,11 +671,41 @@ def insert_activity_rules():
                     'title': 'Pest Control',
                     'description': 'Control pests during flowering',
                     'measurements': '',
-                    'target_pest': 'Maize Cob Borer',
+                    'target_pest': 'Maize Cob Borer, Sap-sucking insects',
                     'day_offset': 5,
                     'order': 2
                 },
-                # Maturation Stage
+                {
+                    'crop_config': config,
+                    'growth_stage': 'flowering',
+                    'title': 'Irrigation',
+                    'description': 'Critical irrigation during flowering',
+                    'measurements': 'Irrigate at 50% tasseling and 50% silking',
+                    'target_pest': '',
+                    'day_offset': 2,
+                    'order': 3
+                },
+                {
+                    'crop_config': config,
+                    'growth_stage': 'flowering',
+                    'title': 'Disease Control',
+                    'description': 'Control leaf diseases',
+                    'measurements': '',
+                    'target_pest': 'Maize leaf blight, Rust',
+                    'day_offset': 3,
+                    'order': 4
+                },
+                {
+                    'crop_config': config,
+                    'growth_stage': 'flowering',
+                    'title': 'Foliar Nutrition',
+                    'description': 'Apply micronutrients',
+                    'measurements': 'ZnSO4: 0.5%',
+                    'target_pest': '',
+                    'day_offset': 4,
+                    'order': 5
+                },
+                # Maturation Stage - 5 activities
                 {
                     'crop_config': config,
                     'growth_stage': 'maturation',
@@ -596,7 +716,47 @@ def insert_activity_rules():
                     'day_offset': 0,
                     'order': 1
                 },
-                # Harvest Stage
+                {
+                    'crop_config': config,
+                    'growth_stage': 'maturation',
+                    'title': 'Pest Monitoring',
+                    'description': 'Check for storage pests in field',
+                    'measurements': '',
+                    'target_pest': 'Maize weevil, Angoumois grain moth',
+                    'day_offset': 7,
+                    'order': 2
+                },
+                {
+                    'crop_config': config,
+                    'growth_stage': 'maturation',
+                    'title': 'Disease Control',
+                    'description': 'Control ear rot diseases',
+                    'measurements': '',
+                    'target_pest': 'Fusarium ear rot, Aspergillus ear rot',
+                    'day_offset': 5,
+                    'order': 3
+                },
+                {
+                    'crop_config': config,
+                    'growth_stage': 'maturation',
+                    'title': 'Nutrient Management',
+                    'description': 'Apply Potassium for grain quality',
+                    'measurements': 'Potash: 30 kg/hectare',
+                    'target_pest': '',
+                    'day_offset': 0,
+                    'order': 4
+                },
+                {
+                    'crop_config': config,
+                    'growth_stage': 'maturation',
+                    'title': 'Soil Moisture Management',
+                    'description': 'Maintain adequate moisture for grain filling',
+                    'measurements': 'Irrigate if soil moisture is low',
+                    'target_pest': '',
+                    'day_offset': 3,
+                    'order': 5
+                },
+                # Harvest Stage - 5 activities
                 {
                     'crop_config': config,
                     'growth_stage': 'harvest',
@@ -608,12 +768,52 @@ def insert_activity_rules():
                     'day_offset': 0,
                     'order': 1
                 },
+                {
+                    'crop_config': config,
+                    'growth_stage': 'harvest',
+                    'title': 'Post Harvest Drying',
+                    'description': 'Dry ears for storage',
+                    'measurements': 'Dry to 14% moisture',
+                    'target_pest': '',
+                    'day_offset': 1,
+                    'order': 2
+                },
+                {
+                    'crop_config': config,
+                    'growth_stage': 'harvest',
+                    'title': 'Shelling',
+                    'description': 'Remove grains from cob',
+                    'measurements': '',
+                    'target_pest': '',
+                    'day_offset': 2,
+                    'order': 3
+                },
+                {
+                    'crop_config': config,
+                    'growth_stage': 'harvest',
+                    'title': 'Grading',
+                    'description': 'Sort grains by quality',
+                    'measurements': '',
+                    'target_pest': '',
+                    'day_offset': 3,
+                    'order': 4
+                },
+                {
+                    'crop_config': config,
+                    'growth_stage': 'harvest',
+                    'title': 'Storage',
+                    'description': 'Store in clean, dry conditions',
+                    'measurements': '',
+                    'target_pest': 'Maize weevil, Rust-red flour beetle',
+                    'day_offset': 4,
+                    'order': 5
+                },
             ])
         
         # ==================== WHEAT SPECIFIC ACTIVITIES ====================
         elif crop_name == 'Wheat':
             activities.extend([
-                # Vegetative Stage
+                # Vegetative Stage - 5 activities
                 {
                     'crop_config': config,
                     'growth_stage': 'vegetative',
@@ -644,7 +844,27 @@ def insert_activity_rules():
                     'day_offset': 10,
                     'order': 3
                 },
-                # Flowering Stage
+                {
+                    'crop_config': config,
+                    'growth_stage': 'vegetative',
+                    'title': 'Weeding',
+                    'description': 'Control broadleaf and grass weeds',
+                    'measurements': '',
+                    'target_pest': 'Wild oats, Chenopodium, Phalaris minor',
+                    'day_offset': 12,
+                    'order': 4
+                },
+                {
+                    'crop_config': config,
+                    'growth_stage': 'vegetative',
+                    'title': 'Second Irrigation',
+                    'description': 'Irrigation at late tillering stage',
+                    'measurements': '',
+                    'target_pest': '',
+                    'day_offset': 7,
+                    'order': 5
+                },
+                # Flowering Stage - 5 activities
                 {
                     'crop_config': config,
                     'growth_stage': 'flowering',
@@ -665,7 +885,37 @@ def insert_activity_rules():
                     'day_offset': 5,
                     'order': 2
                 },
-                # Maturation Stage
+                {
+                    'crop_config': config,
+                    'growth_stage': 'flowering',
+                    'title': 'Third Irrigation',
+                    'description': 'Critical irrigation at heading',
+                    'measurements': '',
+                    'target_pest': '',
+                    'day_offset': 3,
+                    'order': 3
+                },
+                {
+                    'crop_config': config,
+                    'growth_stage': 'flowering',
+                    'title': 'Pest Control',
+                    'description': 'Control aphids and armyworm',
+                    'measurements': '',
+                    'target_pest': 'Aphids, Armyworm, Hesseian fly',
+                    'day_offset': 5,
+                    'order': 4
+                },
+                {
+                    'crop_config': config,
+                    'growth_stage': 'flowering',
+                    'title': 'Foliar Nutrition',
+                    'description': 'Apply micronutrients for grain filling',
+                    'measurements': 'ZnSO4: 0.5%, FeSO4: 0.5%',
+                    'target_pest': '',
+                    'day_offset': 4,
+                    'order': 5
+                },
+                # Maturation Stage - 5 activities
                 {
                     'crop_config': config,
                     'growth_stage': 'maturation',
@@ -676,7 +926,47 @@ def insert_activity_rules():
                     'day_offset': 0,
                     'order': 1
                 },
-                # Harvest Stage
+                {
+                    'crop_config': config,
+                    'growth_stage': 'maturation',
+                    'title': 'Disease Monitoring',
+                    'description': 'Check for late season diseases',
+                    'measurements': '',
+                    'target_pest': 'Karnal bunt, Flag smut',
+                    'day_offset': 7,
+                    'order': 2
+                },
+                {
+                    'crop_config': config,
+                    'growth_stage': 'maturation',
+                    'title': 'Stop Irrigation',
+                    'description': 'Stop irrigation 10-12 days before harvest',
+                    'measurements': '',
+                    'target_pest': '',
+                    'day_offset': 8,
+                    'order': 3
+                },
+                {
+                    'crop_config': config,
+                    'growth_stage': 'maturation',
+                    'title': 'Lodging Prevention',
+                    'description': 'Manage lodging in case of heavy rain/wind',
+                    'measurements': '',
+                    'target_pest': '',
+                    'day_offset': 0,
+                    'order': 4
+                },
+                {
+                    'crop_config': config,
+                    'growth_stage': 'maturation',
+                    'title': 'Quality Check',
+                    'description': 'Monitor grain quality parameters',
+                    'measurements': '',
+                    'target_pest': '',
+                    'day_offset': 5,
+                    'order': 5
+                },
+                # Harvest Stage - 5 activities
                 {
                     'crop_config': config,
                     'growth_stage': 'harvest',
@@ -688,12 +978,52 @@ def insert_activity_rules():
                     'day_offset': 0,
                     'order': 1
                 },
+                {
+                    'crop_config': config,
+                    'growth_stage': 'harvest',
+                    'title': 'Threshing',
+                    'description': 'Separate grain from straw',
+                    'measurements': '',
+                    'target_pest': '',
+                    'day_offset': 1,
+                    'order': 2
+                },
+                {
+                    'crop_config': config,
+                    'growth_stage': 'harvest',
+                    'title': 'Winnowing and Cleaning',
+                    'description': 'Clean grain for storage',
+                    'measurements': '',
+                    'target_pest': '',
+                    'day_offset': 2,
+                    'order': 3
+                },
+                {
+                    'crop_config': config,
+                    'growth_stage': 'harvest',
+                    'title': 'Drying',
+                    'description': 'Dry grain to safe moisture level',
+                    'measurements': 'Dry to 12-14% moisture',
+                    'target_pest': '',
+                    'day_offset': 1,
+                    'order': 4
+                },
+                {
+                    'crop_config': config,
+                    'growth_stage': 'harvest',
+                    'title': 'Storage',
+                    'description': 'Store in proper conditions',
+                    'measurements': '',
+                    'target_pest': 'Wheat weevil, Lesser grain borer',
+                    'day_offset': 3,
+                    'order': 5
+                },
             ])
         
         # ==================== POTATO SPECIFIC ACTIVITIES ====================
         elif crop_name == 'Potato':
             activities.extend([
-                # Vegetative Stage
+                # Vegetative Stage - 5 activities
                 {
                     'crop_config': config,
                     'growth_stage': 'vegetative',
@@ -714,7 +1044,37 @@ def insert_activity_rules():
                     'day_offset': 5,
                     'order': 2
                 },
-                # Flowering Stage
+                {
+                    'crop_config': config,
+                    'growth_stage': 'vegetative',
+                    'title': 'Irrigation',
+                    'description': 'Maintain adequate soil moisture',
+                    'measurements': 'Irrigate at 50% depletion',
+                    'target_pest': '',
+                    'day_offset': 0,
+                    'order': 3
+                },
+                {
+                    'crop_config': config,
+                    'growth_stage': 'vegetative',
+                    'title': 'Weeding',
+                    'description': 'Remove weeds to reduce competition',
+                    'measurements': '',
+                    'target_pest': '',
+                    'day_offset': 7,
+                    'order': 4
+                },
+                {
+                    'crop_config': config,
+                    'growth_stage': 'vegetative',
+                    'title': 'Disease Monitoring',
+                    'description': 'Monitor for early blight',
+                    'measurements': '',
+                    'target_pest': 'Early blight, Black leg',
+                    'day_offset': 3,
+                    'order': 5
+                },
+                # Flowering Stage - 5 activities
                 {
                     'crop_config': config,
                     'growth_stage': 'flowering',
@@ -735,7 +1095,37 @@ def insert_activity_rules():
                     'day_offset': 5,
                     'order': 2
                 },
-                # Maturation Stage
+                {
+                    'crop_config': config,
+                    'growth_stage': 'flowering',
+                    'title': 'Fertilizer Application',
+                    'description': 'Apply potassium for tuber development',
+                    'measurements': 'Potash: 80 kg/hectare',
+                    'target_pest': '',
+                    'day_offset': 2,
+                    'order': 3
+                },
+                {
+                    'crop_config': config,
+                    'growth_stage': 'flowering',
+                    'title': 'Pest Control',
+                    'description': 'Control aphids and tuber moths',
+                    'measurements': '',
+                    'target_pest': 'Aphids, Potato tuber moth',
+                    'day_offset': 5,
+                    'order': 4
+                },
+                {
+                    'crop_config': config,
+                    'growth_stage': 'flowering',
+                    'title': 'Irrigation',
+                    'description': 'Critical irrigation during tuberization',
+                    'measurements': 'Irrigate weekly',
+                    'target_pest': '',
+                    'day_offset': 3,
+                    'order': 5
+                },
+                # Maturation Stage - 5 activities
                 {
                     'crop_config': config,
                     'growth_stage': 'maturation',
@@ -746,7 +1136,47 @@ def insert_activity_rules():
                     'day_offset': 0,
                     'order': 1
                 },
-                # Harvest Stage
+                {
+                    'crop_config': config,
+                    'growth_stage': 'maturation',
+                    'title': 'Late Blight Control',
+                    'description': 'Apply protective fungicide',
+                    'measurements': '',
+                    'target_pest': 'Late blight',
+                    'day_offset': 5,
+                    'order': 2
+                },
+                {
+                    'crop_config': config,
+                    'growth_stage': 'maturation',
+                    'title': 'Vine Killing',
+                    'description': 'Desiccate vines for uniform tuber maturation',
+                    'measurements': 'Spray contact herbicide if needed',
+                    'target_pest': '',
+                    'day_offset': 10,
+                    'order': 3
+                },
+                {
+                    'crop_config': config,
+                    'growth_stage': 'maturation',
+                    'title': 'Disease Check',
+                    'description': 'Monitor for storage diseases in field',
+                    'measurements': '',
+                    'target_pest': 'Soft rot, Wart disease',
+                    'day_offset': 3,
+                    'order': 4
+                },
+                {
+                    'crop_config': config,
+                    'growth_stage': 'maturation',
+                    'title': 'Tuber Quality Assessment',
+                    'description': 'Check tuber size and quality',
+                    'measurements': '',
+                    'target_pest': '',
+                    'day_offset': 7,
+                    'order': 5
+                },
+                # Harvest Stage - 5 activities
                 {
                     'crop_config': config,
                     'growth_stage': 'harvest',
@@ -758,12 +1188,52 @@ def insert_activity_rules():
                     'day_offset': 0,
                     'order': 1
                 },
+                {
+                    'crop_config': config,
+                    'growth_stage': 'harvest',
+                    'title': 'Curing',
+                    'description': 'Cure potatoes for storage',
+                    'measurements': '12-15°C, 90% humidity for 10-14 days',
+                    'target_pest': '',
+                    'day_offset': 0,
+                    'order': 2
+                },
+                {
+                    'crop_config': config,
+                    'growth_stage': 'harvest',
+                    'title': 'Grading',
+                    'description': 'Sort potatoes by size and quality',
+                    'measurements': '',
+                    'target_pest': '',
+                    'day_offset': 1,
+                    'order': 3
+                },
+                {
+                    'crop_config': config,
+                    'growth_stage': 'harvest',
+                    'title': 'Storage',
+                    'description': 'Store in cold storage',
+                    'measurements': '2-4°C for processing, 8-10°C for seed',
+                    'target_pest': '',
+                    'day_offset': 2,
+                    'order': 4
+                },
+                {
+                    'crop_config': config,
+                    'growth_stage': 'harvest',
+                    'title': 'Storage Monitoring',
+                    'description': 'Monitor for sprouting and diseases',
+                    'measurements': '',
+                    'target_pest': '',
+                    'day_offset': 7,
+                    'order': 5
+                },
             ])
         
         # ==================== MUSTARD SPECIFIC ACTIVITIES ====================
         elif crop_name == 'Mustard':
             activities.extend([
-                # Vegetative Stage
+                # Vegetative Stage - 5 activities
                 {
                     'crop_config': config,
                     'growth_stage': 'vegetative',
@@ -784,7 +1254,37 @@ def insert_activity_rules():
                     'day_offset': 10,
                     'order': 2
                 },
-                # Flowering Stage
+                {
+                    'crop_config': config,
+                    'growth_stage': 'vegetative',
+                    'title': 'Weeding',
+                    'description': 'Remove weeds at rosette stage',
+                    'measurements': '',
+                    'target_pest': '',
+                    'day_offset': 8,
+                    'order': 3
+                },
+                {
+                    'crop_config': config,
+                    'growth_stage': 'vegetative',
+                    'title': 'Thinning',
+                    'description': 'Maintain proper plant spacing',
+                    'measurements': 'Keep 15-20 cm plant spacing',
+                    'target_pest': '',
+                    'day_offset': 5,
+                    'order': 4
+                },
+                {
+                    'crop_config': config,
+                    'growth_stage': 'vegetative',
+                    'title': 'Pest Monitoring',
+                    'description': 'Monitor for aphids and flea beetles',
+                    'measurements': '',
+                    'target_pest': 'Aphids, Flea beetles, Sawfly',
+                    'day_offset': 3,
+                    'order': 5
+                },
+                # Flowering Stage - 5 activities
                 {
                     'crop_config': config,
                     'growth_stage': 'flowering',
@@ -795,7 +1295,47 @@ def insert_activity_rules():
                     'day_offset': 0,
                     'order': 1
                 },
-                # Maturation Stage
+                {
+                    'crop_config': config,
+                    'growth_stage': 'flowering',
+                    'title': 'Second Irrigation',
+                    'description': 'Irrigate during peak flowering',
+                    'measurements': 'Critical irrigation at flowering stage',
+                    'target_pest': '',
+                    'day_offset': 3,
+                    'order': 2
+                },
+                {
+                    'crop_config': config,
+                    'growth_stage': 'flowering',
+                    'title': 'Foliar Spray',
+                    'description': 'Apply boron for pod setting',
+                    'measurements': 'Borax 0.2% solution',
+                    'target_pest': '',
+                    'day_offset': 5,
+                    'order': 3
+                },
+                {
+                    'crop_config': config,
+                    'growth_stage': 'flowering',
+                    'title': 'Disease Control',
+                    'description': 'Control white rust and Alternaria blight',
+                    'measurements': '',
+                    'target_pest': 'White rust, Alternaria blight',
+                    'day_offset': 5,
+                    'order': 4
+                },
+                {
+                    'crop_config': config,
+                    'growth_stage': 'flowering',
+                    'title': 'Nutrition',
+                    'description': 'Apply sulfur for oil quality',
+                    'measurements': 'Sulfur: 20 kg/hectare',
+                    'target_pest': '',
+                    'day_offset': 2,
+                    'order': 5
+                },
+                # Maturation Stage - 5 activities
                 {
                     'crop_config': config,
                     'growth_stage': 'maturation',
@@ -806,7 +1346,47 @@ def insert_activity_rules():
                     'day_offset': 0,
                     'order': 1
                 },
-                # Harvest Stage
+                {
+                    'crop_config': config,
+                    'growth_stage': 'maturation',
+                    'title': 'Pest Control',
+                    'description': 'Control pod borers',
+                    'measurements': '',
+                    'target_pest': 'Pod borer, Pod weevil',
+                    'day_offset': 5,
+                    'order': 2
+                },
+                {
+                    'crop_config': config,
+                    'growth_stage': 'maturation',
+                    'title': 'Disease Monitoring',
+                    'description': 'Check for Alternaria blight on pods',
+                    'measurements': '',
+                    'target_pest': 'Alternaria blight',
+                    'day_offset': 3,
+                    'order': 3
+                },
+                {
+                    'crop_config': config,
+                    'growth_stage': 'maturation',
+                    'title': 'Pre-Harvest Desiccation',
+                    'description': 'Speed up uniform maturity if needed',
+                    'measurements': '',
+                    'target_pest': '',
+                    'day_offset': 7,
+                    'order': 4
+                },
+                {
+                    'crop_config': config,
+                    'growth_stage': 'maturation',
+                    'title': 'Quality Assessment',
+                    'description': 'Check oil content and quality',
+                    'measurements': '',
+                    'target_pest': '',
+                    'day_offset': 0,
+                    'order': 5
+                },
+                # Harvest Stage - 5 activities
                 {
                     'crop_config': config,
                     'growth_stage': 'harvest',
@@ -818,12 +1398,52 @@ def insert_activity_rules():
                     'day_offset': 0,
                     'order': 1
                 },
+                {
+                    'crop_config': config,
+                    'growth_stage': 'harvest',
+                    'title': 'Threshing',
+                    'description': 'Thresh to separate seeds',
+                    'measurements': '',
+                    'target_pest': '',
+                    'day_offset': 1,
+                    'order': 2
+                },
+                {
+                    'crop_config': config,
+                    'growth_stage': 'harvest',
+                    'title': 'Cleaning',
+                    'description': 'Clean seeds for storage',
+                    'measurements': '',
+                    'target_pest': '',
+                    'day_offset': 2,
+                    'order': 3
+                },
+                {
+                    'crop_config': config,
+                    'growth_stage': 'harvest',
+                    'title': 'Drying',
+                    'description': 'Dry seeds to safe moisture level',
+                    'measurements': 'Dry to 8-9% moisture',
+                    'target_pest': '',
+                    'day_offset': 1,
+                    'order': 4
+                },
+                {
+                    'crop_config': config,
+                    'growth_stage': 'harvest',
+                    'title': 'Storage',
+                    'description': 'Store in clean, dry conditions',
+                    'measurements': '',
+                    'target_pest': 'Mustard weevil, Grain moth',
+                    'day_offset': 3,
+                    'order': 5
+                },
             ])
         
         # ==================== LENTIL SPECIFIC ACTIVITIES ====================
         elif crop_name == 'Lentil':
             activities.extend([
-                # Vegetative Stage
+                # Vegetative Stage - 5 activities
                 {
                     'crop_config': config,
                     'growth_stage': 'vegetative',
@@ -834,18 +1454,149 @@ def insert_activity_rules():
                     'day_offset': 0,
                     'order': 1
                 },
-                # Flowering Stage
+                {
+                    'crop_config': config,
+                    'growth_stage': 'vegetative',
+                    'title': 'Inoculation',
+                    'description': 'Rhizobium inoculation for nitrogen fixation',
+                    'measurements': 'Rhizobium leguminosarum culture',
+                    'target_pest': '',
+                    'day_offset': 0,
+                    'order': 2
+                },
+                {
+                    'crop_config': config,
+                    'growth_stage': 'vegetative',
+                    'title': 'Weeding',
+                    'description': 'First weeding at 20-25 days',
+                    'measurements': '',
+                    'target_pest': '',
+                    'day_offset': 10,
+                    'order': 3
+                },
+                {
+                    'crop_config': config,
+                    'growth_stage': 'vegetative',
+                    'title': 'Irrigation',
+                    'description': 'Irrigate if soil moisture is low',
+                    'measurements': '',
+                    'target_pest': '',
+                    'day_offset': 0,
+                    'order': 4
+                },
+                {
+                    'crop_config': config,
+                    'growth_stage': 'vegetative',
+                    'title': 'Pest Monitoring',
+                    'description': 'Monitor for aphids and cutworms',
+                    'measurements': '',
+                    'target_pest': 'Aphids, Cutworms, Semilooper',
+                    'day_offset': 5,
+                    'order': 5
+                },
+                # Flowering Stage - 5 activities
                 {
                     'crop_config': config,
                     'growth_stage': 'flowering',
                     'title': 'Pest Control',
                     'description': 'Control aphids and pod borer',
                     'measurements': '',
-                    'target_pest': 'Aphids, Pod borer',
+                    'target_pest': 'Aphids, Pod borer, Gram caterpillar',
                     'day_offset': 0,
                     'order': 1
                 },
-                # Harvest Stage
+                {
+                    'crop_config': config,
+                    'growth_stage': 'flowering',
+                    'title': 'Foliar Nutrition',
+                    'description': 'Apply micronutrients for pod setting',
+                    'measurements': 'ZnSO4: 0.5%, Borax: 0.2%',
+                    'target_pest': '',
+                    'day_offset': 3,
+                    'order': 2
+                },
+                {
+                    'crop_config': config,
+                    'growth_stage': 'flowering',
+                    'title': 'Disease Control',
+                    'description': 'Control rust and powdery mildew',
+                    'measurements': '',
+                    'target_pest': 'Rust, Powdery mildew',
+                    'day_offset': 5,
+                    'order': 3
+                },
+                {
+                    'crop_config': config,
+                    'growth_stage': 'flowering',
+                    'title': 'Irrigation',
+                    'description': 'Critical irrigation during flowering',
+                    'measurements': '',
+                    'target_pest': '',
+                    'day_offset': 2,
+                    'order': 4
+                },
+                {
+                    'crop_config': config,
+                    'growth_stage': 'flowering',
+                    'title': 'Weeding',
+                    'description': 'Second weeding if needed',
+                    'measurements': '',
+                    'target_pest': '',
+                    'day_offset': 5,
+                    'order': 5
+                },
+                # Maturation Stage - 5 activities
+                {
+                    'crop_config': config,
+                    'growth_stage': 'maturation',
+                    'title': 'Stop Irrigation',
+                    'description': 'Stop watering for maturation',
+                    'measurements': '',
+                    'target_pest': '',
+                    'day_offset': 0,
+                    'order': 1
+                },
+                {
+                    'crop_config': config,
+                    'growth_stage': 'maturation',
+                    'title': 'Pest Control',
+                    'description': 'Control pod borer at maturity',
+                    'measurements': '',
+                    'target_pest': 'Pod borer, Bruchids',
+                    'day_offset': 5,
+                    'order': 2
+                },
+                {
+                    'crop_config': config,
+                    'growth_stage': 'maturation',
+                    'title': 'Disease Monitoring',
+                    'description': 'Check for diseases on pods',
+                    'measurements': '',
+                    'target_pest': 'Ascochyta blight',
+                    'day_offset': 3,
+                    'order': 3
+                },
+                {
+                    'crop_config': config,
+                    'growth_stage': 'maturation',
+                    'title': 'Lodging Prevention',
+                    'description': 'Prevent lodging due to heavy rain',
+                    'measurements': '',
+                    'target_pest': '',
+                    'day_offset': 0,
+                    'order': 4
+                },
+                {
+                    'crop_config': config,
+                    'growth_stage': 'maturation',
+                    'title': 'Quality Assessment',
+                    'description': 'Monitor seed maturity and quality',
+                    'measurements': '',
+                    'target_pest': '',
+                    'day_offset': 5,
+                    'order': 5
+                },
+                # Harvest Stage - 5 activities
                 {
                     'crop_config': config,
                     'growth_stage': 'harvest',
@@ -857,12 +1608,52 @@ def insert_activity_rules():
                     'day_offset': 0,
                     'order': 1
                 },
+                {
+                    'crop_config': config,
+                    'growth_stage': 'harvest',
+                    'title': 'Threshing',
+                    'description': 'Thresh to separate seeds',
+                    'measurements': '',
+                    'target_pest': '',
+                    'day_offset': 1,
+                    'order': 2
+                },
+                {
+                    'crop_config': config,
+                    'growth_stage': 'harvest',
+                    'title': 'Cleaning',
+                    'description': 'Clean seeds for storage',
+                    'measurements': '',
+                    'target_pest': '',
+                    'day_offset': 2,
+                    'order': 3
+                },
+                {
+                    'crop_config': config,
+                    'growth_stage': 'harvest',
+                    'title': 'Drying',
+                    'description': 'Dry seeds to safe moisture level',
+                    'measurements': 'Dry to 12-14% moisture',
+                    'target_pest': '',
+                    'day_offset': 1,
+                    'order': 4
+                },
+                {
+                    'crop_config': config,
+                    'growth_stage': 'harvest',
+                    'title': 'Storage',
+                    'description': 'Store in proper conditions',
+                    'measurements': '',
+                    'target_pest': 'Bruchid beetles, Weevils',
+                    'day_offset': 3,
+                    'order': 5
+                },
             ])
         
         # ==================== MILLET SPECIFIC ACTIVITIES ====================
         elif crop_name == 'Millet':
             activities.extend([
-                # Vegetative Stage
+                # Vegetative Stage - 5 activities
                 {
                     'crop_config': config,
                     'growth_stage': 'vegetative',
@@ -873,18 +1664,149 @@ def insert_activity_rules():
                     'day_offset': 0,
                     'order': 1
                 },
-                # Flowering Stage
+                {
+                    'crop_config': config,
+                    'growth_stage': 'vegetative',
+                    'title': 'Weeding',
+                    'description': 'First weeding at 15-20 days',
+                    'measurements': '',
+                    'target_pest': '',
+                    'day_offset': 8,
+                    'order': 2
+                },
+                {
+                    'crop_config': config,
+                    'growth_stage': 'vegetative',
+                    'title': 'Thinning',
+                    'description': 'Maintain proper plant spacing',
+                    'measurements': 'Keep 10-15 cm plant spacing',
+                    'target_pest': '',
+                    'day_offset': 5,
+                    'order': 3
+                },
+                {
+                    'crop_config': config,
+                    'growth_stage': 'vegetative',
+                    'title': 'Pest Monitoring',
+                    'description': 'Monitor for shoot fly and stem borer',
+                    'measurements': '',
+                    'target_pest': 'Shoot fly, Stem borer',
+                    'day_offset': 3,
+                    'order': 4
+                },
+                {
+                    'crop_config': config,
+                    'growth_stage': 'vegetative',
+                    'title': 'Irrigation',
+                    'description': 'Irrigate if soil moisture is low',
+                    'measurements': '',
+                    'target_pest': '',
+                    'day_offset': 0,
+                    'order': 5
+                },
+                # Flowering Stage - 5 activities
                 {
                     'crop_config': config,
                     'growth_stage': 'flowering',
                     'title': 'Pest Control',
                     'description': 'Control shoot fly and stem borer',
                     'measurements': '',
-                    'target_pest': 'Shoot fly, Stem borer',
+                    'target_pest': 'Shoot fly, Stem borer, Midge',
                     'day_offset': 0,
                     'order': 1
                 },
-                # Harvest Stage
+                {
+                    'crop_config': config,
+                    'growth_stage': 'flowering',
+                    'title': 'Second Weeding',
+                    'description': 'Remove weeds at flowering',
+                    'measurements': '',
+                    'target_pest': '',
+                    'day_offset': 3,
+                    'order': 2
+                },
+                {
+                    'crop_config': config,
+                    'growth_stage': 'flowering',
+                    'title': 'Fertilizer Application',
+                    'description': 'Top dressing at panicle initiation',
+                    'measurements': 'Urea: 20 kg/hectare',
+                    'target_pest': '',
+                    'day_offset': 2,
+                    'order': 3
+                },
+                {
+                    'crop_config': config,
+                    'growth_stage': 'flowering',
+                    'title': 'Disease Control',
+                    'description': 'Control rust and smut diseases',
+                    'measurements': '',
+                    'target_pest': 'Rust, Smut, Leaf spot',
+                    'day_offset': 5,
+                    'order': 4
+                },
+                {
+                    'crop_config': config,
+                    'growth_stage': 'flowering',
+                    'title': 'Irrigation',
+                    'description': 'Irrigate during flowering',
+                    'measurements': 'Critical irrigation at flowering',
+                    'target_pest': '',
+                    'day_offset': 3,
+                    'order': 5
+                },
+                # Maturation Stage - 5 activities
+                {
+                    'crop_config': config,
+                    'growth_stage': 'maturation',
+                    'title': 'Stop Irrigation',
+                    'description': 'Stop watering for grain filling',
+                    'measurements': '',
+                    'target_pest': '',
+                    'day_offset': 0,
+                    'order': 1
+                },
+                {
+                    'crop_config': config,
+                    'growth_stage': 'maturation',
+                    'title': 'Pest Control',
+                    'description': 'Control birds and grain pests',
+                    'measurements': '',
+                    'target_pest': 'Birds, Grain pests',
+                    'day_offset': 5,
+                    'order': 2
+                },
+                {
+                    'crop_config': config,
+                    'growth_stage': 'maturation',
+                    'title': 'Disease Monitoring',
+                    'description': 'Check for diseases on heads',
+                    'measurements': '',
+                    'target_pest': 'Head mold, Ergot',
+                    'day_offset': 3,
+                    'order': 3
+                },
+                {
+                    'crop_config': config,
+                    'growth_stage': 'maturation',
+                    'title': 'Lodging Prevention',
+                    'description': 'Prevent lodging in heavy rain',
+                    'measurements': '',
+                    'target_pest': '',
+                    'day_offset': 0,
+                    'order': 4
+                },
+                {
+                    'crop_config': config,
+                    'growth_stage': 'maturation',
+                    'title': 'Quality Assessment',
+                    'description': 'Check grain quality',
+                    'measurements': '',
+                    'target_pest': '',
+                    'day_offset': 5,
+                    'order': 5
+                },
+                # Harvest Stage - 5 activities
                 {
                     'crop_config': config,
                     'growth_stage': 'harvest',
@@ -896,12 +1818,52 @@ def insert_activity_rules():
                     'day_offset': 0,
                     'order': 1
                 },
+                {
+                    'crop_config': config,
+                    'growth_stage': 'harvest',
+                    'title': 'Threshing',
+                    'description': 'Thresh to separate grains',
+                    'measurements': '',
+                    'target_pest': '',
+                    'day_offset': 1,
+                    'order': 2
+                },
+                {
+                    'crop_config': config,
+                    'growth_stage': 'harvest',
+                    'title': 'Cleaning',
+                    'description': 'Clean grains for storage',
+                    'measurements': '',
+                    'target_pest': '',
+                    'day_offset': 2,
+                    'order': 3
+                },
+                {
+                    'crop_config': config,
+                    'growth_stage': 'harvest',
+                    'title': 'Drying',
+                    'description': 'Dry grains to safe moisture level',
+                    'measurements': 'Dry to 12-14% moisture',
+                    'target_pest': '',
+                    'day_offset': 1,
+                    'order': 4
+                },
+                {
+                    'crop_config': config,
+                    'growth_stage': 'harvest',
+                    'title': 'Storage',
+                    'description': 'Store in proper conditions',
+                    'measurements': '',
+                    'target_pest': 'Storage weevils, Moths',
+                    'day_offset': 3,
+                    'order': 5
+                },
             ])
         
         # ==================== BARLEY SPECIFIC ACTIVITIES ====================
         elif crop_name == 'Barley':
             activities.extend([
-                # Vegetative Stage
+                # Vegetative Stage - 5 activities
                 {
                     'crop_config': config,
                     'growth_stage': 'vegetative',
@@ -912,7 +1874,47 @@ def insert_activity_rules():
                     'day_offset': 0,
                     'order': 1
                 },
-                # Flowering Stage
+                {
+                    'crop_config': config,
+                    'growth_stage': 'vegetative',
+                    'title': 'First Irrigation',
+                    'description': 'Irrigate at tillering stage',
+                    'measurements': '',
+                    'target_pest': '',
+                    'day_offset': 7,
+                    'order': 2
+                },
+                {
+                    'crop_config': config,
+                    'growth_stage': 'vegetative',
+                    'title': 'Weeding',
+                    'description': 'Control weeds at tillering stage',
+                    'measurements': '',
+                    'target_pest': '',
+                    'day_offset': 10,
+                    'order': 3
+                },
+                {
+                    'crop_config': config,
+                    'growth_stage': 'vegetative',
+                    'title': 'Second Irrigation',
+                    'description': 'Irrigation at maximum tillering',
+                    'measurements': '',
+                    'target_pest': '',
+                    'day_offset': 10,
+                    'order': 4
+                },
+                {
+                    'crop_config': config,
+                    'growth_stage': 'vegetative',
+                    'title': 'Pest Monitoring',
+                    'description': 'Monitor for aphids and armyworm',
+                    'measurements': '',
+                    'target_pest': 'Aphids, Armyworm',
+                    'day_offset': 5,
+                    'order': 5
+                },
+                # Flowering Stage - 5 activities
                 {
                     'crop_config': config,
                     'growth_stage': 'flowering',
@@ -923,7 +1925,98 @@ def insert_activity_rules():
                     'day_offset': 0,
                     'order': 1
                 },
-                # Harvest Stage
+                {
+                    'crop_config': config,
+                    'growth_stage': 'flowering',
+                    'title': 'Fertilizer Application',
+                    'description': 'Top dressing at heading',
+                    'measurements': 'Urea: 30 kg/hectare',
+                    'target_pest': '',
+                    'day_offset': 3,
+                    'order': 2
+                },
+                {
+                    'crop_config': config,
+                    'growth_stage': 'flowering',
+                    'title': 'Disease Control',
+                    'description': 'Control rust and powdery mildew',
+                    'measurements': '',
+                    'target_pest': 'Rust, Powdery mildew, Scab',
+                    'day_offset': 5,
+                    'order': 3
+                },
+                {
+                    'crop_config': config,
+                    'growth_stage': 'flowering',
+                    'title': 'Pest Control',
+                    'description': 'Control aphids and Hesseian fly',
+                    'measurements': '',
+                    'target_pest': 'Aphids, Hesseian fly',
+                    'day_offset': 5,
+                    'order': 4
+                },
+                {
+                    'crop_config': config,
+                    'growth_stage': 'flowering',
+                    'title': 'Foliar Nutrition',
+                    'description': 'Apply micronutrients',
+                    'measurements': 'ZnSO4: 0.5%, FeSO4: 0.5%',
+                    'target_pest': '',
+                    'day_offset': 4,
+                    'order': 5
+                },
+                # Maturation Stage - 5 activities
+                {
+                    'crop_config': config,
+                    'growth_stage': 'maturation',
+                    'title': 'Stop Irrigation',
+                    'description': 'Stop watering for maturation',
+                    'measurements': '',
+                    'target_pest': '',
+                    'day_offset': 0,
+                    'order': 1
+                },
+                {
+                    'crop_config': config,
+                    'growth_stage': 'maturation',
+                    'title': 'Lodging Prevention',
+                    'description': 'Prevent lodging in heavy rain/wind',
+                    'measurements': '',
+                    'target_pest': '',
+                    'day_offset': 0,
+                    'order': 2
+                },
+                {
+                    'crop_config': config,
+                    'growth_stage': 'maturation',
+                    'title': 'Disease Monitoring',
+                    'description': 'Check for late season diseases',
+                    'measurements': '',
+                    'target_pest': 'Net blotch, Barley scab',
+                    'day_offset': 5,
+                    'order': 3
+                },
+                {
+                    'crop_config': config,
+                    'growth_stage': 'maturation',
+                    'title': 'Pre-Harvest Desiccation',
+                    'description': 'Speed up uniform maturity if needed',
+                    'measurements': '',
+                    'target_pest': '',
+                    'day_offset': 7,
+                    'order': 4
+                },
+                {
+                    'crop_config': config,
+                    'growth_stage': 'maturation',
+                    'title': 'Quality Assessment',
+                    'description': 'Check malting quality parameters',
+                    'measurements': '',
+                    'target_pest': '',
+                    'day_offset': 5,
+                    'order': 5
+                },
+                # Harvest Stage - 5 activities
                 {
                     'crop_config': config,
                     'growth_stage': 'harvest',
@@ -935,12 +2028,52 @@ def insert_activity_rules():
                     'day_offset': 0,
                     'order': 1
                 },
+                {
+                    'crop_config': config,
+                    'growth_stage': 'harvest',
+                    'title': 'Threshing',
+                    'description': 'Thresh to separate grains',
+                    'measurements': '',
+                    'target_pest': '',
+                    'day_offset': 1,
+                    'order': 2
+                },
+                {
+                    'crop_config': config,
+                    'growth_stage': 'harvest',
+                    'title': 'Cleaning and Grading',
+                    'description': 'Clean and grade barley',
+                    'measurements': '',
+                    'target_pest': '',
+                    'day_offset': 2,
+                    'order': 3
+                },
+                {
+                    'crop_config': config,
+                    'growth_stage': 'harvest',
+                    'title': 'Drying',
+                    'description': 'Dry to safe moisture level',
+                    'measurements': 'Dry to 13-14% moisture for malting',
+                    'target_pest': '',
+                    'day_offset': 1,
+                    'order': 4
+                },
+                {
+                    'crop_config': config,
+                    'growth_stage': 'harvest',
+                    'title': 'Storage',
+                    'description': 'Store in proper conditions',
+                    'measurements': '',
+                    'target_pest': 'Storage weevils, Grain beetles',
+                    'day_offset': 3,
+                    'order': 5
+                },
             ])
         
         # ==================== BUCKWHEAT SPECIFIC ACTIVITIES ====================
         elif crop_name == 'Buckwheat':
             activities.extend([
-                # Vegetative Stage
+                # Vegetative Stage - 5 activities
                 {
                     'crop_config': config,
                     'growth_stage': 'vegetative',
@@ -951,7 +2084,47 @@ def insert_activity_rules():
                     'day_offset': 0,
                     'order': 1
                 },
-                # Flowering Stage
+                {
+                    'crop_config': config,
+                    'growth_stage': 'vegetative',
+                    'title': 'Weeding',
+                    'description': 'Manual weeding',
+                    'measurements': '',
+                    'target_pest': '',
+                    'day_offset': 5,
+                    'order': 2
+                },
+                {
+                    'crop_config': config,
+                    'growth_stage': 'vegetative',
+                    'title': 'Thinning',
+                    'description': 'Maintain proper plant spacing',
+                    'measurements': 'Keep 20-25 cm spacing',
+                    'target_pest': '',
+                    'day_offset': 3,
+                    'order': 3
+                },
+                {
+                    'crop_config': config,
+                    'growth_stage': 'vegetative',
+                    'title': 'Irrigation',
+                    'description': 'Irrigate if soil moisture is low',
+                    'measurements': '',
+                    'target_pest': '',
+                    'day_offset': 0,
+                    'order': 4
+                },
+                {
+                    'crop_config': config,
+                    'growth_stage': 'vegetative',
+                    'title': 'Pest Monitoring',
+                    'description': 'Monitor for aphids and pests',
+                    'measurements': '',
+                    'target_pest': 'Aphids, Caterpillars',
+                    'day_offset': 3,
+                    'order': 5
+                },
+                # Flowering Stage - 5 activities
                 {
                     'crop_config': config,
                     'growth_stage': 'flowering',
@@ -962,7 +2135,98 @@ def insert_activity_rules():
                     'day_offset': 0,
                     'order': 1
                 },
-                # Harvest Stage
+                {
+                    'crop_config': config,
+                    'growth_stage': 'flowering',
+                    'title': 'Fertilizer Application',
+                    'description': 'Apply potassium at flowering',
+                    'measurements': 'Potash: 20 kg/hectare',
+                    'target_pest': '',
+                    'day_offset': 3,
+                    'order': 2
+                },
+                {
+                    'crop_config': config,
+                    'growth_stage': 'flowering',
+                    'title': 'Pest Control',
+                    'description': 'Control aphids if needed',
+                    'measurements': '',
+                    'target_pest': 'Aphids',
+                    'day_offset': 5,
+                    'order': 3
+                },
+                {
+                    'crop_config': config,
+                    'growth_stage': 'flowering',
+                    'title': 'Disease Control',
+                    'description': 'Control leaf spot and downy mildew',
+                    'measurements': '',
+                    'target_pest': 'Leaf spot, Downy mildew',
+                    'day_offset': 5,
+                    'order': 4
+                },
+                {
+                    'crop_config': config,
+                    'growth_stage': 'flowering',
+                    'title': 'Foliar Nutrition',
+                    'description': 'Apply micronutrients for seed set',
+                    'measurements': 'Borax: 0.2%, ZnSO4: 0.5%',
+                    'target_pest': '',
+                    'day_offset': 4,
+                    'order': 5
+                },
+                # Maturation Stage - 5 activities
+                {
+                    'crop_config': config,
+                    'growth_stage': 'maturation',
+                    'title': 'Stop Irrigation',
+                    'description': 'Stop watering for maturation',
+                    'measurements': '',
+                    'target_pest': '',
+                    'day_offset': 0,
+                    'order': 1
+                },
+                {
+                    'crop_config': config,
+                    'growth_stage': 'maturation',
+                    'title': 'Lodging Prevention',
+                    'description': 'Prevent lodging in heavy rain/wind',
+                    'measurements': '',
+                    'target_pest': '',
+                    'day_offset': 0,
+                    'order': 2
+                },
+                {
+                    'crop_config': config,
+                    'growth_stage': 'maturation',
+                    'title': 'Disease Monitoring',
+                    'description': 'Check for diseases on seeds',
+                    'measurements': '',
+                    'target_pest': 'Gray mold, Leaf spot',
+                    'day_offset': 3,
+                    'order': 3
+                },
+                {
+                    'crop_config': config,
+                    'growth_stage': 'maturation',
+                    'title': 'Pre-Harvest Desiccation',
+                    'description': 'Speed up uniform maturity',
+                    'measurements': '',
+                    'target_pest': '',
+                    'day_offset': 5,
+                    'order': 4
+                },
+                {
+                    'crop_config': config,
+                    'growth_stage': 'maturation',
+                    'title': 'Quality Assessment',
+                    'description': 'Check seed quality',
+                    'measurements': '',
+                    'target_pest': '',
+                    'day_offset': 5,
+                    'order': 5
+                },
+                # Harvest Stage - 5 activities
                 {
                     'crop_config': config,
                     'growth_stage': 'harvest',
@@ -974,12 +2238,52 @@ def insert_activity_rules():
                     'day_offset': 0,
                     'order': 1
                 },
+                {
+                    'crop_config': config,
+                    'growth_stage': 'harvest',
+                    'title': 'Threshing',
+                    'description': 'Thresh to separate seeds',
+                    'measurements': '',
+                    'target_pest': '',
+                    'day_offset': 1,
+                    'order': 2
+                },
+                {
+                    'crop_config': config,
+                    'growth_stage': 'harvest',
+                    'title': 'Cleaning and Grading',
+                    'description': 'Clean and grade seeds',
+                    'measurements': '',
+                    'target_pest': '',
+                    'day_offset': 2,
+                    'order': 3
+                },
+                {
+                    'crop_config': config,
+                    'growth_stage': 'harvest',
+                    'title': 'Drying',
+                    'description': 'Dry seeds to safe moisture level',
+                    'measurements': 'Dry to 12-14% moisture',
+                    'target_pest': '',
+                    'day_offset': 1,
+                    'order': 4
+                },
+                {
+                    'crop_config': config,
+                    'growth_stage': 'harvest',
+                    'title': 'Storage',
+                    'description': 'Store in proper conditions',
+                    'measurements': '',
+                    'target_pest': 'Storage weevils',
+                    'day_offset': 3,
+                    'order': 5
+                },
             ])
         
         # ==================== SOYBEAN SPECIFIC ACTIVITIES ====================
         elif crop_name == 'Soybean':
             activities.extend([
-                # Vegetative Stage
+                # Vegetative Stage - 5 activities
                 {
                     'crop_config': config,
                     'growth_stage': 'vegetative',
@@ -990,18 +2294,149 @@ def insert_activity_rules():
                     'day_offset': 0,
                     'order': 1
                 },
-                # Flowering Stage
+                {
+                    'crop_config': config,
+                    'growth_stage': 'vegetative',
+                    'title': 'Inoculation',
+                    'description': 'Rhizobium inoculation for nitrogen fixation',
+                    'measurements': 'Rhizobium japonicum culture',
+                    'target_pest': '',
+                    'day_offset': 0,
+                    'order': 2
+                },
+                {
+                    'crop_config': config,
+                    'growth_stage': 'vegetative',
+                    'title': 'Weeding',
+                    'description': 'First weeding at 15-20 days',
+                    'measurements': '',
+                    'target_pest': '',
+                    'day_offset': 8,
+                    'order': 3
+                },
+                {
+                    'crop_config': config,
+                    'growth_stage': 'vegetative',
+                    'title': 'Thinning',
+                    'description': 'Maintain proper plant spacing',
+                    'measurements': 'Keep 5-10 cm spacing',
+                    'target_pest': '',
+                    'day_offset': 5,
+                    'order': 4
+                },
+                {
+                    'crop_config': config,
+                    'growth_stage': 'vegetative',
+                    'title': 'Pest Monitoring',
+                    'description': 'Monitor for stem fly and defoliators',
+                    'measurements': '',
+                    'target_pest': 'Stem fly, Leaf miner, Girdle beetle',
+                    'day_offset': 3,
+                    'order': 5
+                },
+                # Flowering Stage - 5 activities
                 {
                     'crop_config': config,
                     'growth_stage': 'flowering',
                     'title': 'Pest Control',
                     'description': 'Control girdle beetle and caterpillars',
                     'measurements': '',
-                    'target_pest': 'Girdle beetle, Tobacco caterpillar',
+                    'target_pest': 'Girdle beetle, Tobacco caterpillar, Semilooper',
                     'day_offset': 0,
                     'order': 1
                 },
-                # Harvest Stage
+                {
+                    'crop_config': config,
+                    'growth_stage': 'flowering',
+                    'title': 'Irrigation',
+                    'description': 'Critical irrigation at flowering',
+                    'measurements': '',
+                    'target_pest': '',
+                    'day_offset': 3,
+                    'order': 2
+                },
+                {
+                    'crop_config': config,
+                    'growth_stage': 'flowering',
+                    'title': 'Foliar Nutrition',
+                    'description': 'Apply micronutrients for pod setting',
+                    'measurements': 'ZnSO4: 0.5%, Borax: 0.2%',
+                    'target_pest': '',
+                    'day_offset': 5,
+                    'order': 3
+                },
+                {
+                    'crop_config': config,
+                    'growth_stage': 'flowering',
+                    'title': 'Disease Control',
+                    'description': 'Control rust and bacterial blight',
+                    'measurements': '',
+                    'target_pest': 'Rust, Bacterial blight, Powdery mildew',
+                    'day_offset': 5,
+                    'order': 4
+                },
+                {
+                    'crop_config': config,
+                    'growth_stage': 'flowering',
+                    'title': 'Weeding',
+                    'description': 'Second weeding if needed',
+                    'measurements': '',
+                    'target_pest': '',
+                    'day_offset': 5,
+                    'order': 5
+                },
+                # Maturation Stage - 5 activities
+                {
+                    'crop_config': config,
+                    'growth_stage': 'maturation',
+                    'title': 'Stop Irrigation',
+                    'description': 'Stop watering for maturation',
+                    'measurements': '',
+                    'target_pest': '',
+                    'day_offset': 0,
+                    'order': 1
+                },
+                {
+                    'crop_config': config,
+                    'growth_stage': 'maturation',
+                    'title': 'Pest Control',
+                    'description': 'Control pod borers',
+                    'measurements': '',
+                    'target_pest': 'Pod borer, Pod bugs',
+                    'day_offset': 5,
+                    'order': 2
+                },
+                {
+                    'crop_config': config,
+                    'growth_stage': 'maturation',
+                    'title': 'Disease Monitoring',
+                    'description': 'Check for pod and seed diseases',
+                    'measurements': '',
+                    'target_pest': 'Pod blight, Seed rot',
+                    'day_offset': 3,
+                    'order': 3
+                },
+                {
+                    'crop_config': config,
+                    'growth_stage': 'maturation',
+                    'title': 'Lodging Prevention',
+                    'description': 'Prevent lodging due to heavy rain',
+                    'measurements': '',
+                    'target_pest': '',
+                    'day_offset': 0,
+                    'order': 4
+                },
+                {
+                    'crop_config': config,
+                    'growth_stage': 'maturation',
+                    'title': 'Quality Assessment',
+                    'description': 'Check seed maturity and quality',
+                    'measurements': '',
+                    'target_pest': '',
+                    'day_offset': 5,
+                    'order': 5
+                },
+                # Harvest Stage - 5 activities
                 {
                     'crop_config': config,
                     'growth_stage': 'harvest',
@@ -1013,12 +2448,52 @@ def insert_activity_rules():
                     'day_offset': 0,
                     'order': 1
                 },
+                {
+                    'crop_config': config,
+                    'growth_stage': 'harvest',
+                    'title': 'Threshing',
+                    'description': 'Thresh to separate beans',
+                    'measurements': '',
+                    'target_pest': '',
+                    'day_offset': 1,
+                    'order': 2
+                },
+                {
+                    'crop_config': config,
+                    'growth_stage': 'harvest',
+                    'title': 'Cleaning and Grading',
+                    'description': 'Clean and grade beans',
+                    'measurements': '',
+                    'target_pest': '',
+                    'day_offset': 2,
+                    'order': 3
+                },
+                {
+                    'crop_config': config,
+                    'growth_stage': 'harvest',
+                    'title': 'Drying',
+                    'description': 'Dry beans to safe moisture level',
+                    'measurements': 'Dry to 12-13% moisture',
+                    'target_pest': '',
+                    'day_offset': 1,
+                    'order': 4
+                },
+                {
+                    'crop_config': config,
+                    'growth_stage': 'harvest',
+                    'title': 'Storage',
+                    'description': 'Store in proper conditions',
+                    'measurements': '',
+                    'target_pest': 'Bruchids, Weevils',
+                    'day_offset': 3,
+                    'order': 5
+                },
             ])
         
         # ==================== SUGARCANE SPECIFIC ACTIVITIES ====================
         elif crop_name == 'Sugarcane':
             activities.extend([
-                # Vegetative Stage
+                # Vegetative Stage - 5 activities
                 {
                     'crop_config': config,
                     'growth_stage': 'vegetative',
@@ -1069,14 +2544,14 @@ def insert_activity_rules():
                     'day_offset': 10,
                     'order': 5
                 },
-                # Flowering Stage (if occurs)
+                # Flowering Stage - 5 activities
                 {
                     'crop_config': config,
                     'growth_stage': 'flowering',
                     'title': 'Pest Control',
                     'description': 'Control pests during flowering',
                     'measurements': '',
-                    'target_pest': 'Stem borer, White grub',
+                    'target_pest': 'Stem borer, White grub, Early shoot borer',
                     'day_offset': 5,
                     'order': 1
                 },
@@ -1090,7 +2565,37 @@ def insert_activity_rules():
                     'day_offset': 0,
                     'order': 2
                 },
-                # Maturation Stage
+                {
+                    'crop_config': config,
+                    'growth_stage': 'flowering',
+                    'title': 'Third Fertilizer Application',
+                    'description': 'Apply additional nitrogen',
+                    'measurements': 'Urea: 40 kg/hectare',
+                    'target_pest': '',
+                    'day_offset': 15,
+                    'order': 3
+                },
+                {
+                    'crop_config': config,
+                    'growth_stage': 'flowering',
+                    'title': 'Disease Control',
+                    'description': 'Control red rot and smut',
+                    'measurements': '',
+                    'target_pest': 'Red rot, Smut, Wilt',
+                    'day_offset': 5,
+                    'order': 4
+                },
+                {
+                    'crop_config': config,
+                    'growth_stage': 'flowering',
+                    'title': 'Weeding',
+                    'description': 'Remove weeds in inter-row spaces',
+                    'measurements': '',
+                    'target_pest': '',
+                    'day_offset': 10,
+                    'order': 5
+                },
+                # Maturation Stage - 5 activities
                 {
                     'crop_config': config,
                     'growth_stage': 'maturation',
@@ -1121,7 +2626,27 @@ def insert_activity_rules():
                     'day_offset': 0,
                     'order': 3
                 },
-                # Harvest Stage
+                {
+                    'crop_config': config,
+                    'growth_stage': 'maturation',
+                    'title': 'Pest Control',
+                    'description': 'Control top borer and scale insects',
+                    'measurements': '',
+                    'target_pest': 'Top borer, Scale insects',
+                    'day_offset': 10,
+                    'order': 4
+                },
+                {
+                    'crop_config': config,
+                    'growth_stage': 'maturation',
+                    'title': 'Quality Assessment',
+                    'description': 'Monitor sucrose content and maturity',
+                    'measurements': '',
+                    'target_pest': '',
+                    'day_offset': 5,
+                    'order': 5
+                },
+                # Harvest Stage - 5 activities
                 {
                     'crop_config': config,
                     'growth_stage': 'harvest',
@@ -1144,12 +2669,42 @@ def insert_activity_rules():
                     'day_offset': 0,
                     'order': 2
                 },
+                {
+                    'crop_config': config,
+                    'growth_stage': 'harvest',
+                    'title': 'Cleaning and Transport',
+                    'description': 'Clean and transport to factory',
+                    'measurements': '',
+                    'target_pest': '',
+                    'day_offset': 1,
+                    'order': 3
+                },
+                {
+                    'crop_config': config,
+                    'growth_stage': 'harvest',
+                    'title': 'Ratoon Management',
+                    'description': 'Prepare for ratoon crop if planned',
+                    'measurements': 'Apply fertilizer and irrigation to ratoon',
+                    'target_pest': '',
+                    'day_offset': 2,
+                    'order': 4
+                },
+                {
+                    'crop_config': config,
+                    'growth_stage': 'harvest',
+                    'title': 'Seed Cane Selection',
+                    'description': 'Select healthy canes for next season planting',
+                    'measurements': '',
+                    'target_pest': '',
+                    'day_offset': 0,
+                    'order': 5
+                },
             ])
         
         # ==================== GINGER SPECIFIC ACTIVITIES ====================
         elif crop_name == 'Ginger':
             activities.extend([
-                # Vegetative Stage
+                # Vegetative Stage - 5 activities
                 {
                     'crop_config': config,
                     'growth_stage': 'vegetative',
@@ -1190,7 +2745,17 @@ def insert_activity_rules():
                     'day_offset': 0,
                     'order': 4
                 },
-                # Maturation Stage
+                {
+                    'crop_config': config,
+                    'growth_stage': 'vegetative',
+                    'title': 'Pest Monitoring',
+                    'description': 'Monitor for shoot borer and nematodes',
+                    'measurements': '',
+                    'target_pest': 'Shoot borer, Nematodes, Aphids',
+                    'day_offset': 5,
+                    'order': 5
+                },
+                # Maturation Stage - 5 activities (Ginger has no distinct flowering stage for production)
                 {
                     'crop_config': config,
                     'growth_stage': 'maturation',
@@ -1207,11 +2772,41 @@ def insert_activity_rules():
                     'title': 'Disease Control',
                     'description': 'Monitor for rhizome rot',
                     'measurements': '',
-                    'target_pest': 'Rhizome rot, Leaf spot',
+                    'target_pest': 'Rhizome rot, Leaf spot, Soft rot',
                     'day_offset': 10,
                     'order': 2
                 },
-                # Harvest Stage
+                {
+                    'crop_config': config,
+                    'growth_stage': 'maturation',
+                    'title': 'Second Fertilizer Application',
+                    'description': 'Apply potassium for rhizome development',
+                    'measurements': 'Potash: 30 kg/hectare',
+                    'target_pest': '',
+                    'day_offset': 5,
+                    'order': 3
+                },
+                {
+                    'crop_config': config,
+                    'growth_stage': 'maturation',
+                    'title': 'Pest Control',
+                    'description': 'Control rhizome flies and pests',
+                    'measurements': '',
+                    'target_pest': 'Rhizome fly, Scale insects',
+                    'day_offset': 8,
+                    'order': 4
+                },
+                {
+                    'crop_config': config,
+                    'growth_stage': 'maturation',
+                    'title': 'Quality Assessment',
+                    'description': 'Check rhizome quality and size',
+                    'measurements': '',
+                    'target_pest': '',
+                    'day_offset': 0,
+                    'order': 5
+                },
+                # Harvest Stage - 5 activities
                 {
                     'crop_config': config,
                     'growth_stage': 'harvest',
@@ -1223,12 +2818,52 @@ def insert_activity_rules():
                     'day_offset': 0,
                     'order': 1
                 },
+                {
+                    'crop_config': config,
+                    'growth_stage': 'harvest',
+                    'title': 'Cleaning',
+                    'description': 'Clean rhizomes after harvest',
+                    'measurements': '',
+                    'target_pest': '',
+                    'day_offset': 1,
+                    'order': 2
+                },
+                {
+                    'crop_config': config,
+                    'growth_stage': 'harvest',
+                    'title': 'Grading',
+                    'description': 'Sort by size and quality',
+                    'measurements': '',
+                    'target_pest': '',
+                    'day_offset': 2,
+                    'order': 3
+                },
+                {
+                    'crop_config': config,
+                    'growth_stage': 'harvest',
+                    'title': 'Curing',
+                    'description': 'Cure rhizomes for storage',
+                    'measurements': '',
+                    'target_pest': '',
+                    'day_offset': 0,
+                    'order': 4
+                },
+                {
+                    'crop_config': config,
+                    'growth_stage': 'harvest',
+                    'title': 'Storage',
+                    'description': 'Store in proper conditions',
+                    'measurements': 'Store at 12-15°C, 60-70% humidity',
+                    'target_pest': '',
+                    'day_offset': 3,
+                    'order': 5
+                },
             ])
         
         # ==================== TURMERIC SPECIFIC ACTIVITIES ====================
         elif crop_name == 'Turmeric':
             activities.extend([
-                # Vegetative Stage
+                # Vegetative Stage - 5 activities
                 {
                     'crop_config': config,
                     'growth_stage': 'vegetative',
@@ -1259,7 +2894,27 @@ def insert_activity_rules():
                     'day_offset': 20,
                     'order': 3
                 },
-                # Maturation Stage
+                {
+                    'crop_config': config,
+                    'growth_stage': 'vegetative',
+                    'title': 'Irrigation',
+                    'description': 'Maintain adequate moisture',
+                    'measurements': 'Irrigate weekly',
+                    'target_pest': '',
+                    'day_offset': 0,
+                    'order': 4
+                },
+                {
+                    'crop_config': config,
+                    'growth_stage': 'vegetative',
+                    'title': 'Pest Monitoring',
+                    'description': 'Monitor for shoot borer and aphids',
+                    'measurements': '',
+                    'target_pest': 'Shoot borer, Aphids, Leaf eating caterpillars',
+                    'day_offset': 5,
+                    'order': 5
+                },
+                # Maturation Stage - 5 activities (Turmeric has no distinct flowering stage for production)
                 {
                     'crop_config': config,
                     'growth_stage': 'maturation',
@@ -1280,7 +2935,37 @@ def insert_activity_rules():
                     'day_offset': 15,
                     'order': 2
                 },
-                # Harvest Stage
+                {
+                    'crop_config': config,
+                    'growth_stage': 'maturation',
+                    'title': 'Second Fertilizer Application',
+                    'description': 'Apply potassium for rhizome development',
+                    'measurements': 'Potash: 30 kg/hectare',
+                    'target_pest': '',
+                    'day_offset': 5,
+                    'order': 3
+                },
+                {
+                    'crop_config': config,
+                    'growth_stage': 'maturation',
+                    'title': 'Pest Control',
+                    'description': 'Control rhizome pests',
+                    'measurements': '',
+                    'target_pest': 'Rhizome weevil, Scale insects',
+                    'day_offset': 10,
+                    'order': 4
+                },
+                {
+                    'crop_config': config,
+                    'growth_stage': 'maturation',
+                    'title': 'Quality Assessment',
+                    'description': 'Check curcumin content and quality',
+                    'measurements': '',
+                    'target_pest': '',
+                    'day_offset': 0,
+                    'order': 5
+                },
+                # Harvest Stage - 5 activities
                 {
                     'crop_config': config,
                     'growth_stage': 'harvest',
@@ -1291,6 +2976,46 @@ def insert_activity_rules():
                     'recommendations': 'Harvest at 7-9 months for processing',
                     'day_offset': 0,
                     'order': 1
+                },
+                {
+                    'crop_config': config,
+                    'growth_stage': 'harvest',
+                    'title': 'Cleaning',
+                    'description': 'Clean rhizomes after harvest',
+                    'measurements': '',
+                    'target_pest': '',
+                    'day_offset': 1,
+                    'order': 2
+                },
+                {
+                    'crop_config': config,
+                    'growth_stage': 'harvest',
+                    'title': 'Boiling',
+                    'description': 'Boil rhizomes for curing',
+                    'measurements': 'Boil for 45-60 minutes',
+                    'target_pest': '',
+                    'day_offset': 2,
+                    'order': 3
+                },
+                {
+                    'crop_config': config,
+                    'growth_stage': 'harvest',
+                    'title': 'Drying',
+                    'description': 'Dry to safe moisture level',
+                    'measurements': 'Dry to 8-10% moisture',
+                    'target_pest': '',
+                    'day_offset': 3,
+                    'order': 4
+                },
+                {
+                    'crop_config': config,
+                    'growth_stage': 'harvest',
+                    'title': 'Polishing and Storage',
+                    'description': 'Polish and store in proper conditions',
+                    'measurements': '',
+                    'target_pest': 'Storage pests',
+                    'day_offset': 5,
+                    'order': 5
                 },
             ])
     
@@ -1319,7 +3044,6 @@ def insert_activity_rules():
     print(f"   ⏭️ Skipped: {skipped_count} existing activities")
     print(f"   📦 Total in DB: {CropActivityRule.objects.count()}")
     print("="*50)
-
 
 if __name__ == "__main__":
     print("🌾 Starting crop data insertion...")
