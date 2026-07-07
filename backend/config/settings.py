@@ -39,6 +39,7 @@ INSTALLED_APPS = [
     'corsheaders',
     'drf_yasg',
     'drf_spectacular',
+    'django_apscheduler',   # APScheduler DB job store
 
     #ourown
     'users',
@@ -48,6 +49,7 @@ INSTALLED_APPS = [
     'weather',
     'notifications',
     'admin_panel',
+    'scheduler',            # Daily 4 AM alert cron jobs
     
 ]
 
@@ -112,7 +114,7 @@ DATABASES = {
         'USER':'postgres',
         'PASSWORD':'12345',
         'HOST':'localhost',
-        'PORT':'5432',
+        'PORT':'5433',
     }
 }
 
@@ -219,9 +221,16 @@ SIMPLE_JWT = {
 CORS_ALLOW_ALL_ORIGINS = True  # Only for development!
 CORS_ALLOW_CREDENTIALS = True
 
-# Email settings (development)
-EMAIL_BACKEND = 'django.core.mail.backends.console.EmailBackend'
-DEFAULT_FROM_EMAIL = 'AgriFlow <noreply@agriflow.com>'
 
 FRONTEND_URL = os.environ.get('FRONTEND_URL', 'http://localhost:3000')
 
+# Email Configuration for Gmail
+EMAIL_BACKEND = 'django.core.mail.backends.smtp.EmailBackend'
+EMAIL_HOST = 'smtp.gmail.com'
+EMAIL_PORT = 587
+EMAIL_USE_TLS = True
+EMAIL_HOST_USER = 'official.agriflow@gmail.com'  
+EMAIL_HOST_PASSWORD = 'ckff rlle vlml dhzz'
+DEFAULT_FROM_EMAIL = 'AgriFlow <official.agriflow@gmail.com>'
+# Frontend URL
+FRONTEND_URL = os.environ.get('FRONTEND_URL', 'http://localhost:3000')
