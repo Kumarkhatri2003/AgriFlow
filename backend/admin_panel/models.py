@@ -5,6 +5,8 @@ from django.utils import timezone
 User = get_user_model()
 
 
+# admin_panel/models.py
+
 class Notification(models.Model):
     """System notifications sent to farmers"""
     
@@ -13,6 +15,7 @@ class Notification(models.Model):
         ('targeted', 'Targeted (Specific Farmers)'),
         ('weather_alert', 'Weather Alert'),
         ('crop_reminder', 'Crop Care Reminder'),
+        ('animal_reminder', 'Animal Care Reminder'),
         ('marketing', 'Marketing/Promotion'),
     ]
     
@@ -23,13 +26,24 @@ class Notification(models.Model):
         ('urgent', 'Urgent'),
     ]
     
+    # English fields
     title = models.CharField(max_length=255)
     message = models.TextField()
+    
+    # Nepali fields (allow blank for English-only notifications)
+    title_np = models.CharField(max_length=255, blank=True, default='')  # Made optional
+    message_np = models.TextField(blank=True, default='')  # Made optional
+    
     notification_type = models.CharField(max_length=50, choices=NOTIFICATION_TYPES)
     priority = models.CharField(max_length=20, choices=PRIORITY_CHOICES, default='medium')
     
     # For targeted notifications
     target_farmers = models.ManyToManyField(User, blank=True, related_name='notifications')
+    target_type = models.CharField(max_length=20, default='all')
+    target_crop = models.CharField(max_length=100, blank=True, default='')
+    target_livestock = models.CharField(max_length=100, blank=True, default='')
+    target_region = models.CharField(max_length=100, blank=True, default='')
+    target_district = models.CharField(max_length=100, blank=True, default='')
     
     # Metadata
     sent_by = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, related_name='sent_notifications')

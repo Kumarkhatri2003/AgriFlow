@@ -11,6 +11,7 @@ from django.core.mail import send_mail
 from django.conf import settings
 import csv
 import uuid
+from django.core.paginator import Paginator, EmptyPage, PageNotAnInteger
 
 import json
 from openpyxl import Workbook
@@ -24,6 +25,7 @@ from .models import Notification, SystemSetting, AdminLog, Report
 from .permissions import IsAdminUser
 from .serializers import *
 from .services import ReportGeneratorService
+from notifications.services import send_bulk_notification 
 
 User = get_user_model()
 
@@ -816,6 +818,97 @@ class CropRegisterView(APIView):
         }, status=status.HTTP_201_CREATED)
 
 
+class ReportStatsView(APIView):
+    """Get report statistics"""
+    permission_classes = [IsAdminUser]
+    
+    def get(self, request):
+        try:
+            total_reports = Report.objects.count()
+            
+            # Reports by type
+            reports_by_type = {}
+            for report_type in ['farmer', 'financial', 'crop', 'livestock']:
+                count = Report.objects.filter(report_type=report_type).count()
+                if count > 0:
+                    reports_by_type[report_type] = count
+            
+            # Reports by format
+            reports_by_format = {}
+            for format_type in ['csv', 'excel', 'pdf']:
+                count = Report.objects.filter(format=format_type).count()
+                if count > 0:
+                    reports_by_format[format_type] = count
+            
+            # Recent reports (last 7 days)
+            week_ago = timezone.now() - timedelta(days=7)
+            recent_count = Report.objects.filter(generated_at__gte=week_ago).count()
+            
+            # Most downloaded report
+            most_downloaded = Report.objects.order_by('-download_count').first()
+            
+            return Response({
+                'total_reports': total_reports,
+                'reports_by_type': reports_by_type,
+                'reports_by_format': reports_by_format,
+                'recent_reports': recent_count,
+                'most_downloaded': {
+                    'id': most_downloaded.id if most_downloaded else None,
+                    'title': most_downloaded.title if most_downloaded else None,
+                    'download_count': most_downloaded.download_count if most_downloaded else 0,
+                } if most_downloaded else None,
+            })
+            
+        except Exception as e:
+            return Response(
+                {'error': f'Failed to get report stats: {str(e)}'},
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )
+
+
+class ReportDownloadView(APIView):
+    """Download a previously generated report"""
+    permission_classes = [IsAdminUser]
+    
+    def get(self, request, report_id):
+        try:
+            report = Report.objects.get(id=report_id)
+            
+            # Increment download count
+            report.download_count += 1
+            report.save()
+            
+            # If the file is stored, serve it
+            if report.file:
+                # Assuming you're using Django's FileField
+                from django.core.files.storage import default_storage
+                
+                if default_storage.exists(report.file.name):
+                    response = HttpResponse(
+                        default_storage.open(report.file.name).read(),
+                        content_type=f'application/{report.format}'
+                    )
+                    response['Content-Disposition'] = f'attachment; filename="{report.file.name}"'
+                    return response
+            
+            # If file not found, regenerate it
+            # You might want to regenerate the report here using ReportGeneratorService
+            return Response(
+                {'error': 'Report file not available. Please regenerate the report.'},
+                status=status.HTTP_404_NOT_FOUND
+            )
+            
+        except Report.DoesNotExist:
+            return Response(
+                {'error': 'Report not found'},
+                status=status.HTTP_404_NOT_FOUND
+            )
+        except Exception as e:
+            return Response(
+                {'error': f'Failed to download report: {str(e)}'},
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )
+
 # ============================================================
 # FINANCIAL MANAGEMENT VIEWS
 # ============================================================
@@ -1248,85 +1341,442 @@ class NotificationManagementView(APIView):
     """Send and manage notifications"""
     permission_classes = [IsAdminUser]
     
+    FARMER_TYPE_MAP = {
+        'weather_alert': 'weather',
+        'crop_reminder': 'crop',
+        'animal_reminder': 'animal',
+        'broadcast': 'admin',
+        'targeted': 'admin',
+        'marketing': 'admin',
+    }
+    
     def get(self, request):
         notifications = Notification.objects.all().order_by('-sent_at')
         
-        # Filter by type
+        # Filter by notification type
         notif_type = request.query_params.get('type')
         if notif_type:
             notifications = notifications.filter(notification_type=notif_type)
         
+        # Filter by priority
+        priority = request.query_params.get('priority')
+        if priority:
+            notifications = notifications.filter(priority=priority)
+        
+        # Filter by date range
+        start_date = request.query_params.get('start_date')
+        end_date = request.query_params.get('end_date')
+        if start_date:
+            try:
+                notifications = notifications.filter(sent_at__date__gte=start_date)
+            except:
+                pass
+        if end_date:
+            try:
+                notifications = notifications.filter(sent_at__date__lte=end_date)
+            except:
+                pass
+        
+        # Search by title
+        search = request.query_params.get('search')
+        if search:
+            notifications = notifications.filter(
+                Q(title__icontains=search) |
+                Q(message__icontains=search)
+            )
+        
         # Pagination
-        page = int(request.query_params.get('page', 1))
-        page_size = int(request.query_params.get('page_size', 20))
+        try:
+            page = int(request.query_params.get('page', 1))
+        except ValueError:
+            page = 1
+        
+        try:
+            page_size = int(request.query_params.get('page_size', 20))
+        except ValueError:
+            page_size = 20
+        
+        # Ensure reasonable page size
+        if page_size > 100:
+            page_size = 100
+        if page_size < 1:
+            page_size = 20
+        
+        total = notifications.count()
         start = (page - 1) * page_size
         end = start + page_size
         
-        total = notifications.count()
+        # Get paginated results
         notifications_page = notifications[start:end]
         
+        # Calculate total pages
+        total_pages = (total + page_size - 1) // page_size if total > 0 else 1
+        
+        # Serialize with NotificationSerializer
+        serializer = NotificationSerializer(notifications_page, many=True)
+        
         return Response({
-            'notifications': NotificationSerializer(notifications_page, many=True).data,
+            'notifications': serializer.data,
             'pagination': {
                 'total': total,
                 'page': page,
-                'page_size': page_size
+                'page_size': page_size,
+                'total_pages': total_pages,
+                'has_next': page < total_pages,
+                'has_previous': page > 1
             }
         })
     
     def post(self, request):
         serializer = SendNotificationSerializer(data=request.data)
         if not serializer.is_valid():
-            return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+            return Response({
+                'error': 'Invalid input',
+                'details': serializer.errors
+            }, status=status.HTTP_400_BAD_REQUEST)
         
         data = serializer.validated_data
         
-        # Create notification
-        notification = Notification.objects.create(
-            title=data['title'],
-            message=data['message'],
-            notification_type=data['notification_type'],
-            priority=data.get('priority', 'medium'),
-            sent_by=request.user
-        )
+        # Start with all farmers (excluding admins)
+        farmers = User.objects.filter(is_farmer=True, is_admin=False)
+        target_type = data.get('target_type', 'all')
         
-        # Add target farmers if specified
-        if data.get('target_farmers'):
+        # Apply filters based on target type
+        try:
+            if target_type == 'individual':
+                if data.get('target_farmers'):
+                    farmers = farmers.filter(id__in=data['target_farmers'])
+                else:
+                    farmers = farmers.none()
+                    
+            elif target_type == 'crop':
+                target_crop = data.get('target_crop')
+                if target_crop:
+                    # Get farmers who have active crops matching the crop name
+                    farmer_ids = Crop.objects.filter(
+                        name__iexact=target_crop,
+                        status='active'
+                    ).values_list('farmer_id', flat=True).distinct()
+                    farmers = farmers.filter(id__in=farmer_ids)
+                else:
+                    farmers = farmers.none()
+                    
+            elif target_type == 'livestock':
+                target_livestock = data.get('target_livestock')
+                if target_livestock:
+                    # Get farmers who have active livestock of this type
+                    farmer_ids = Animal.objects.filter(
+                        animal_type__name__iexact=target_livestock,
+                        status='active'
+                    ).values_list('farmer_id', flat=True).distinct()
+                    farmers = farmers.filter(id__in=farmer_ids)
+                else:
+                    farmers = farmers.none()
+                    
+            elif target_type == 'region':
+                target_region = data.get('target_region')
+                if target_region:
+                    farmers = farmers.filter(geographical_region__iexact=target_region)
+                else:
+                    farmers = farmers.none()
+                    
+            elif target_type == 'district':
+                target_district = data.get('target_district')
+                if target_district:
+                    farmers = farmers.filter(
+                        Q(district__iexact=target_district) |
+                        Q(farm_district__iexact=target_district)
+                    )
+                else:
+                    farmers = farmers.none()
+                    
+        except Exception as e:
+            return Response({
+                'error': f'Error filtering farmers: {str(e)}'
+            }, status=status.HTTP_400_BAD_REQUEST)
+        
+        # Check if we have any farmers to send to
+        farmer_count = farmers.count()
+        if farmer_count == 0:
+            return Response({
+                'error': 'No farmers match the selected criteria',
+                'message': 'Please adjust your targeting filters'
+            }, status=status.HTTP_400_BAD_REQUEST)
+        
+        try:
+            # Create the admin notification record with both English and Nepali fields
+            notification = Notification.objects.create(
+                title=data['title'],
+                title_np=data.get('title_np', ''),  # Use empty string if not provided
+                message=data['message'],
+                message_np=data.get('message_np', ''),  # Use empty string if not provided
+                notification_type=data['notification_type'],
+                priority=data.get('priority', 'medium'),
+                sent_by=request.user,
+                sent_at=timezone.now(),
+                target_type=target_type,
+                target_crop=data.get('target_crop', ''),
+                target_livestock=data.get('target_livestock', ''),
+                target_region=data.get('target_region', ''),
+                target_district=data.get('target_district', ''),
+            )
+            
+            # Set the target farmers (ManyToMany)
+            notification.target_farmers.set(farmers)
+            
+            
+            farmer_notification_type = self.FARMER_TYPE_MAP.get(
+                data['notification_type'], 'admin'
+            )
+            
+            # Send notifications to individual farmer notification feeds
+            from notifications.services import send_bulk_notification
+            send_bulk_notification(
+                farmers=farmers,
+                title=notification.title,
+                message=notification.message,
+                notification_type=farmer_notification_type,
+                priority=notification.priority,
+                title_np=notification.title_np,
+                message_np=notification.message_np,
+            )
+            
+            # Send email notifications if requested
+            if data.get('send_email', False):
+                email_count = self.send_email_notifications(notification)
+                # Note: You may need to add email_sent and email_sent_count fields to your model
+                # notification.email_sent = True
+                # notification.email_sent_count = email_count
+                # notification.save(update_fields=['email_sent', 'email_sent_count'])
+            
+            # Log the admin action
+            AdminLog.objects.create(
+                admin_user=request.user,
+                action='SEND_NOTIFICATION',
+                model_name='Notification',
+                object_id=str(notification.id),
+                object_repr=notification.title,
+                changes={
+                    'target_type': target_type,
+                    'farmer_count': farmer_count,
+                    'notification_type': data['notification_type'],
+                    'priority': data.get('priority', 'medium'),
+                    'send_email': data.get('send_email', False),
+                    'has_nepali_title': bool(data.get('title_np')),
+                    'has_nepali_message': bool(data.get('message_np'))
+                },
+                ip_address=request.META.get('REMOTE_ADDR'),
+                user_agent=request.META.get('HTTP_USER_AGENT', '')
+            )
+            
+            # Return success response
+            return Response({
+                'success': True,
+                'message': f'Notification sent successfully to {farmer_count} farmers',
+                'notification': NotificationSerializer(notification).data,
+                'farmer_count': farmer_count,
+                'email_sent': data.get('send_email', False)
+            }, status=status.HTTP_201_CREATED)
+            
+        except Exception as e:
+            return Response({
+                'error': f'Failed to send notification: {str(e)}'
+            }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+    
+    def send_email_notifications(self, notification):
+        """
+        Send email notifications to all target farmers
+        Returns the number of emails successfully sent
+        """
+        email_count = 0
+        failed_count = 0
+        
+        for farmer in notification.target_farmers.all():
+            if farmer.email:
+                try:
+                    # Build email content with both languages if available
+                    subject = notification.title
+                    if notification.title_np:
+                        subject = f"{notification.title} | {notification.title_np}"
+                    
+                    message_content = notification.message
+                    if notification.message_np:
+                        message_content = f"{notification.message}\n\n---\nनेपाली:\n{notification.message_np}"
+                    
+                    send_mail(
+                        subject=f"[AgriFlow] {subject}",
+                        message=f"""
+Dear {farmer.get_full_name() or farmer.username},
+
+{message_content}
+
+---
+This is an automated notification from AgriFlow Admin.
+Please log in to your account for more details.
+                        """,
+                        from_email=settings.DEFAULT_FROM_EMAIL,
+                        recipient_list=[farmer.email],
+                        fail_silently=False,
+                    )
+                    email_count += 1
+                except Exception as e:
+                    failed_count += 1
+                    # Log the failure but continue
+                    print(f"Failed to send email to {farmer.email}: {str(e)}")
+        
+        return email_count
+    
+    def put(self, request, notification_id):
+        """
+        PUT /api/admin/notifications/{id}/
+        Update a notification (only if not sent yet)
+        """
+        try:
+            notification = Notification.objects.get(id=notification_id)
+        except Notification.DoesNotExist:
+            return Response({
+                'error': 'Notification not found'
+            }, status=status.HTTP_404_NOT_FOUND)
+        
+        # Check if notification has already been sent
+        if notification.sent_at:
+            return Response({
+                'error': 'Cannot update a notification that has already been sent'
+            }, status=status.HTTP_403_FORBIDDEN)
+        
+        serializer = SendNotificationSerializer(data=request.data)
+        if not serializer.is_valid():
+            return Response({
+                'error': 'Invalid input',
+                'details': serializer.errors
+            }, status=status.HTTP_400_BAD_REQUEST)
+        
+        data = serializer.validated_data
+        
+        # Update notification fields
+        notification.title = data['title']
+        notification.title_np = data.get('title_np', '')
+        notification.message = data['message']
+        notification.message_np = data.get('message_np', '')
+        notification.notification_type = data['notification_type']
+        notification.priority = data.get('priority', 'medium')
+        notification.target_type = data.get('target_type', 'all')
+        notification.target_crop = data.get('target_crop', '')
+        notification.target_livestock = data.get('target_livestock', '')
+        notification.target_region = data.get('target_region', '')
+        notification.target_district = data.get('target_district', '')
+        
+        # Update target farmers if individual targeting
+        if notification.target_type == 'individual' and data.get('target_farmers'):
             farmers = User.objects.filter(id__in=data['target_farmers'], is_farmer=True)
             notification.target_farmers.set(farmers)
-        else:
-            # Broadcast to all farmers
-            all_farmers = User.objects.filter(is_farmer=True)
-            notification.target_farmers.set(all_farmers)
         
-        # Send email if requested
-        if data.get('send_email'):
-            self.send_email_notifications(notification)
+        notification.save()
         
+        # Log the update
         AdminLog.objects.create(
             admin_user=request.user,
-            action='SEND_NOTIFICATION',
+            action='UPDATE',
             model_name='Notification',
             object_id=str(notification.id),
             object_repr=notification.title,
-            changes=data
+            changes={'updated_fields': list(data.keys())},
+            ip_address=request.META.get('REMOTE_ADDR')
         )
         
-        return Response(NotificationSerializer(notification).data, status=status.HTTP_201_CREATED)
+        return Response({
+            'success': True,
+            'message': 'Notification updated successfully',
+            'notification': NotificationSerializer(notification).data
+        })
     
-    def send_email_notifications(self, notification):
-        """Send email notifications to farmers"""
-        for farmer in notification.target_farmers.all():
-            if farmer.email:
-                send_mail(
-                    subject=notification.title,
-                    message=notification.message,
-                    from_email=settings.DEFAULT_FROM_EMAIL,
-                    recipient_list=[farmer.email],
-                    fail_silently=True
-                )
-
-
+    def delete(self, request, notification_id):
+        """
+        DELETE /api/admin/notifications/{id}/
+        Delete a notification (only if not sent yet)
+        """
+        try:
+            notification = Notification.objects.get(id=notification_id)
+        except Notification.DoesNotExist:
+            return Response({
+                'error': 'Notification not found'
+            }, status=status.HTTP_404_NOT_FOUND)
+        
+        # Check if notification has already been sent
+        if notification.sent_at:
+            return Response({
+                'error': 'Cannot delete a notification that has already been sent'
+            }, status=status.HTTP_403_FORBIDDEN)
+        
+        # Store info for logging before deletion
+        notification_title = notification.title
+        
+        # Delete the notification
+        notification.delete()
+        
+        # Log the deletion
+        AdminLog.objects.create(
+            admin_user=request.user,
+            action='DELETE',
+            model_name='Notification',
+            object_repr=notification_title,
+            ip_address=request.META.get('REMOTE_ADDR')
+        )
+        
+        return Response({
+            'success': True,
+            'message': 'Notification deleted successfully'
+        })
+    
+    def patch(self, request, notification_id):
+        """
+        PATCH /api/admin/notifications/{id}/
+        Partially update a notification
+        """
+        try:
+            notification = Notification.objects.get(id=notification_id)
+        except Notification.DoesNotExist:
+            return Response({
+                'error': 'Notification not found'
+            }, status=status.HTTP_404_NOT_FOUND)
+        
+        # Check if notification has already been sent
+        if notification.sent_at:
+            return Response({
+                'error': 'Cannot update a notification that has already been sent'
+            }, status=status.HTTP_403_FORBIDDEN)
+        
+        # Update only provided fields
+        if 'title' in request.data:
+            notification.title = request.data['title']
+        if 'title_np' in request.data:
+            notification.title_np = request.data['title_np']
+        if 'message' in request.data:
+            notification.message = request.data['message']
+        if 'message_np' in request.data:
+            notification.message_np = request.data['message_np']
+        if 'notification_type' in request.data:
+            notification.notification_type = request.data['notification_type']
+        if 'priority' in request.data:
+            notification.priority = request.data['priority']
+        if 'target_type' in request.data:
+            notification.target_type = request.data['target_type']
+        if 'target_crop' in request.data:
+            notification.target_crop = request.data['target_crop']
+        if 'target_livestock' in request.data:
+            notification.target_livestock = request.data['target_livestock']
+        if 'target_region' in request.data:
+            notification.target_region = request.data['target_region']
+        if 'target_district' in request.data:
+            notification.target_district = request.data['target_district']
+        
+        notification.save()
+        
+        return Response({
+            'success': True,
+            'message': 'Notification updated successfully',
+            'notification': NotificationSerializer(notification).data
+        })
 # ============================================================
 # SYSTEM SETTINGS VIEWS
 # ============================================================
@@ -1414,7 +1864,7 @@ class LivestockTypeManagementView(APIView):
 
 # ============================================================
 # REPORT VIEWS
-# ============================================================
+# ===========================================================
 
 # admin_panel/views.py - Ensure ReportGenerationView returns the file correctly
 
@@ -1426,49 +1876,241 @@ class ReportGenerationView(APIView):
         serializer = GenerateReportSerializer(data=request.data)
         if not serializer.is_valid():
             return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
-        
+
         data = serializer.validated_data
-        report_type = data['report_type']
-        format_type = data['format']
-        start_date = data['date_range_start']
-        end_date = data['date_range_end']
         
-        # Generate report using service (returns HttpResponse)
-        response = ReportGeneratorService.generate_report(
-            report_type=report_type,
-            format=format_type,
-            start_date=start_date,
-            end_date=end_date,
-            include_details=data.get('include_details', True),
-            user=request.user
-        )
-        
-        return response  
+        try:
+            print(f"🔍 Generating report: {data['report_type']} for {data['date_range_start']} to {data['date_range_end']}")
+            
+            response = ReportGeneratorService.generate_report(
+                report_type=data['report_type'],
+                format=data['format'],
+                start_date=data['date_range_start'],
+                end_date=data['date_range_end'],
+                include_details=data.get('include_details', True),
+                user=request.user,
+            )
+            
+            print(f"✅ Report generated successfully")
+            
+            return response
+        except Exception as exc:
+            print(f"❌ Error generating report: {str(exc)}")
+            import traceback
+            traceback.print_exc()
+            return Response(
+                {'error': f'Failed to generate report: {str(exc)}'},
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            )
 
 
 class ReportHistoryView(APIView):
-    """View generated reports history"""
+    """View generated reports history with pagination and filtering"""
     permission_classes = [IsAdminUser]
     
     def get(self, request):
-        reports = Report.objects.all().order_by('-generated_at')
-        
-        # Filter by type
-        report_type = request.query_params.get('type')
-        if report_type:
-            reports = reports.filter(report_type=report_type)
-        
-        serializer = ReportSerializer(reports, many=True)
-        return Response(serializer.data)
+        try:
+            print("🔍 Fetching reports...")
+            # Get all reports ordered by generation date
+            reports = Report.objects.all().select_related('generated_by').order_by('-generated_at')
+            
+            print(f"📊 Total reports found: {reports.count()}")
+            
+            # Apply filters - ONLY on direct fields, NOT on JSON fields
+            report_type = request.query_params.get('report_type')
+            if report_type:
+                reports = reports.filter(report_type=report_type)
+                print(f"🔍 Filtered by report_type: {report_type}, count: {reports.count()}")
+            
+            format_filter = request.query_params.get('format')
+            if format_filter:
+                reports = reports.filter(format=format_filter)
+                print(f"🔍 Filtered by format: {format_filter}, count: {reports.count()}")
+            
+            # Date range filters - filter on generated_at
+            start_date = request.query_params.get('start_date')
+            end_date = request.query_params.get('end_date')
+            if start_date:
+                try:
+                    start = datetime.strptime(start_date, '%Y-%m-%d')
+                    reports = reports.filter(generated_at__date__gte=start)
+                    print(f"🔍 Filtered by start_date: {start_date}, count: {reports.count()}")
+                except ValueError as e:
+                    print(f"⚠️ Invalid start_date: {start_date}, error: {e}")
+                    pass
+            
+            if end_date:
+                try:
+                    end = datetime.strptime(end_date, '%Y-%m-%d')
+                    reports = reports.filter(generated_at__date__lte=end)
+                    print(f"🔍 Filtered by end_date: {end_date}, count: {reports.count()}")
+                except ValueError as e:
+                    print(f"⚠️ Invalid end_date: {end_date}, error: {e}")
+                    pass
+            
+            # Search by title or report type
+            search = request.query_params.get('search')
+            if search:
+                reports = reports.filter(
+                    Q(title__icontains=search) |
+                    Q(report_type__icontains=search)
+                )
+                print(f"🔍 Filtered by search: {search}, count: {reports.count()}")
+            
+            # Get pagination parameters
+            try:
+                page = int(request.query_params.get('page', 1))
+            except ValueError:
+                page = 1
+            
+            try:
+                page_size = int(request.query_params.get('page_size', 5))
+            except ValueError:
+                page_size = 5
+            
+            # Ensure page_size is reasonable
+            if page_size > 100:
+                page_size = 100
+            if page_size < 1:
+                page_size = 5
+            
+            # Calculate pagination
+            total = reports.count()
+            start = (page - 1) * page_size
+            end = start + page_size
+            
+            # Get the page of reports
+            reports_page = reports[start:end]
+            
+            total_pages = (total + page_size - 1) // page_size if total > 0 else 1
+            
+            print(f"📄 Page {page} of {total_pages}")
+            print(f"📄 Showing {reports_page.count()} reports out of {total}")
+            
+            # Serialize with all required fields
+            reports_data = []
+            for report in reports_page:
+                try:
+                    # Safely get filters
+                    filters_data = {}
+                    if hasattr(report, 'filters') and report.filters:
+                        if isinstance(report.filters, dict):
+                            filters_data = report.filters
+                        else:
+                            # Try to parse if it's a string
+                            try:
+                                import json
+                                filters_data = json.loads(report.filters) if isinstance(report.filters, str) else {}
+                            except:
+                                filters_data = {}
+                    
+                    # Get file URL if it exists
+                    file_url = None
+                    if report.file and hasattr(report.file, 'url'):
+                        file_url = report.file.url
+                    elif report.file and isinstance(report.file, str):
+                        file_url = report.file
+                    
+                    reports_data.append({
+                        'id': report.id,
+                        'report_type': report.report_type,
+                        'title': report.title,
+                        'format': report.format,
+                        'file': file_url,
+                        'filters': filters_data,
+                        'generated_at': report.generated_at.isoformat() if report.generated_at else None,
+                        'generated_by': report.generated_by.id if report.generated_by else None,
+                        'generated_by_name': report.generated_by.get_full_name() if report.generated_by else 'System',
+                        'download_count': report.download_count or 0,
+                    })
+                except Exception as e:
+                    print(f"⚠️ Error serializing report {report.id}: {e}")
+                    import traceback
+                    traceback.print_exc()
+                    # Still include the report with basic info
+                    reports_data.append({
+                        'id': report.id,
+                        'report_type': report.report_type,
+                        'title': report.title,
+                        'format': report.format,
+                        'file': None,
+                        'filters': {},
+                        'generated_at': report.generated_at.isoformat() if report.generated_at else None,
+                        'generated_by': report.generated_by.id if report.generated_by else None,
+                        'generated_by_name': report.generated_by.get_full_name() if report.generated_by else 'System',
+                        'download_count': report.download_count or 0,
+                    })
+            
+            response_data = {
+                'reports': reports_data,
+                'pagination': {
+                    'current_page': page,
+                    'total_pages': total_pages,
+                    'total_items': total,
+                    'per_page': page_size,
+                    'has_next': end < total,
+                    'has_previous': page > 1,
+                }
+            }
+            
+            print(f"📤 Returning {len(reports_data)} reports with pagination")
+            
+            return Response(response_data)
+            
+        except Exception as e:
+            print(f"❌ Error in ReportHistoryView: {str(e)}")
+            import traceback
+            traceback.print_exc()
+            return Response(
+                {'error': f'Failed to fetch reports: {str(e)}'},
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )
     
     def delete(self, request, report_id):
+        """Delete a specific report"""
         try:
             report = Report.objects.get(id=report_id)
+            
+            # Delete the file if it exists
+            if report.file:
+                try:
+                    report.file.delete(save=False)
+                except Exception as e:
+                    print(f"⚠️ Error deleting file: {e}")
+            
+            report.delete()
+            
+            # Log the action
+            try:
+                AdminLog.objects.create(
+                    admin_user=request.user,
+                    action='DELETE',
+                    model_name='Report',
+                    object_id=str(report_id),
+                    object_repr=report.title,
+                    ip_address=request.META.get('REMOTE_ADDR')
+                )
+            except:
+                pass
+            
+            return Response(
+                {'message': 'Report deleted successfully'},
+                status=status.HTTP_200_OK
+            )
+            
         except Report.DoesNotExist:
-            return Response({'error': 'Report not found'}, status=status.HTTP_404_NOT_FOUND)
-        
-        report.delete()
-        return Response({'message': 'Report deleted successfully'})
+            return Response(
+                {'error': 'Report not found'},
+                status=status.HTTP_404_NOT_FOUND
+            )
+        except Exception as e:
+            print(f"❌ Error deleting report: {e}")
+            import traceback
+            traceback.print_exc()
+            return Response(
+                {'error': f'Failed to delete report: {str(e)}'},
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )
 
 
 # ============================================================
@@ -1669,4 +2311,576 @@ class AdminLogsView(APIView):
                 'page': page,
                 'page_size': page_size
             }
+        })
+        
+        
+# ============================================================
+# ADMIN MARK ALL READ VIEW
+# ============================================================
+
+class AdminMarkAllReadView(APIView):
+    """
+    Mark all notifications as read for all farmers
+    """
+    permission_classes = [IsAdminUser]
+    
+    def post(self, request):
+        try:
+            from notifications.models import Notification as FarmerNotification
+            now = timezone.now()
+            
+            # Get all unread farmer notifications
+            unread_count = FarmerNotification.objects.filter(is_read=False).count()
+            
+            # Mark all as read
+            updated = FarmerNotification.objects.filter(is_read=False).update(
+                is_read=True,
+                read_at=now
+            )
+            
+            # Log the action
+            AdminLog.objects.create(
+                admin_user=request.user,
+                action='MARK_ALL_READ',
+                model_name='Notification',
+                changes={
+                    'marked_count': updated,
+                    'total_unread_before': unread_count
+                },
+                ip_address=request.META.get('REMOTE_ADDR')
+            )
+            
+            return Response({
+                'success': True,
+                'message': f'Marked {updated} notifications as read for all farmers',
+                'marked_count': updated
+            })
+            
+        except Exception as e:
+            return Response({
+                'error': f'Failed to mark notifications as read: {str(e)}'
+            }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+
+# ============================================================
+# ADMIN NOTIFICATION DETAIL VIEW
+# ============================================================
+
+class AdminNotificationDetailView(APIView):
+    """
+    Get, update, or delete a single notification
+    """
+    permission_classes = [IsAdminUser]
+    
+    def get(self, request, notification_id):
+        """
+        GET /api/admin/notifications/{id}/
+        Get notification details
+        """
+        try:
+            notification = Notification.objects.get(id=notification_id)
+        except Notification.DoesNotExist:
+            return Response({
+                'error': 'Notification not found'
+            }, status=status.HTTP_404_NOT_FOUND)
+        
+        serializer = NotificationSerializer(notification)
+        return Response({
+            'notification': serializer.data,
+            'is_sent': notification.sent_at is not None,
+            'target_farmer_count': notification.target_farmers.count()
+        })
+    
+    def put(self, request, notification_id):
+        """
+        PUT /api/admin/notifications/{id}/
+        Update notification (delegates to NotificationManagementView)
+        """
+        return NotificationManagementView().put(request, notification_id)
+    
+    def delete(self, request, notification_id):
+        """
+        DELETE /api/admin/notifications/{id}/
+        Delete notification (delegates to NotificationManagementView)
+        """
+        return NotificationManagementView().delete(request, notification_id)
+
+
+class KnowledgeBaseListView(APIView):
+    """
+    GET /api/admin/knowledge-base/ - List all knowledge base entries
+    POST /api/admin/knowledge-base/ - Create new knowledge base entry
+    """
+    permission_classes = [IsAdminUser]
+    
+    def get(self, request):
+        """List all knowledge base entries with filters and pagination"""
+        queryset = CropKnowledgeBase.objects.all().order_by('name_en')
+        
+        # ===== SEARCH =====
+        search = request.query_params.get('search')
+        if search:
+            queryset = queryset.filter(
+                Q(name_en__icontains=search) |
+                Q(name_np__icontains=search) |
+                Q(category__icontains=search)
+            )
+        
+        # ===== FILTERS =====
+        category = request.query_params.get('category')
+        if category:
+            queryset = queryset.filter(category=category)
+        
+        season = request.query_params.get('season')
+        if season:
+            queryset = queryset.filter(
+                Q(best_season=season) |
+                Q(other_seasons__icontains=season)
+            )
+        
+        drought_tolerance = request.query_params.get('drought_tolerance')
+        if drought_tolerance:
+            queryset = queryset.filter(drought_tolerance=drought_tolerance)
+        
+        frost_sensitive = request.query_params.get('frost_sensitive')
+        if frost_sensitive:
+            queryset = queryset.filter(frost_sensitive=frost_sensitive)
+        
+        water_req = request.query_params.get('water_req')
+        if water_req:
+            queryset = queryset.filter(water_req=water_req)
+        
+        # ===== PAGINATION =====
+        page = request.query_params.get('page', 1)
+        page_size = request.query_params.get('page_size', 20)
+        
+        try:
+            page = int(page)
+            page_size = int(page_size)
+        except ValueError:
+            page = 1
+            page_size = 20
+        
+        # Ensure reasonable page size
+        if page_size > 100:
+            page_size = 100
+        if page_size < 1:
+            page_size = 20
+        
+        paginator = Paginator(queryset, page_size)
+        total = paginator.count
+        
+        try:
+            items = paginator.page(page)
+        except PageNotAnInteger:
+            items = paginator.page(1)
+            page = 1
+        except EmptyPage:
+            items = paginator.page(paginator.num_pages)
+            page = paginator.num_pages
+        
+        # ===== SERIALIZE =====
+        serializer = AdminKnowledgeBaseListSerializer(items, many=True)
+        
+        return Response({
+            'data': serializer.data,
+            'pagination': {
+                'total': total,
+                'page': page,
+                'page_size': page_size,
+                'total_pages': paginator.num_pages,
+                'has_next': items.has_next(),
+                'has_previous': items.has_previous()
+            }
+        })
+    
+    def post(self, request):
+        """Create new knowledge base entry"""
+        serializer = AdminKnowledgeBaseCreateUpdateSerializer(data=request.data)
+        if serializer.is_valid():
+            instance = serializer.save()
+            
+            # Log the action
+            AdminLog.objects.create(
+                admin_user=request.user,
+                action='CREATE',
+                model_name='KnowledgeBase',
+                object_id=str(instance.id),
+                object_repr=instance.name_en,
+                ip_address=request.META.get('REMOTE_ADDR'),
+                user_agent=request.META.get('HTTP_USER_AGENT', '')
+            )
+            
+            # Return full detail
+            detail_serializer = AdminKnowledgeBaseDetailSerializer(instance)
+            return Response(detail_serializer.data, status=status.HTTP_201_CREATED)
+        
+        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
+
+class KnowledgeBaseDetailView(APIView):
+    """
+    GET /api/admin/knowledge-base/{id}/ - Get single entry
+    PUT /api/admin/knowledge-base/{id}/ - Update entry
+    DELETE /api/admin/knowledge-base/{id}/ - Delete entry
+    """
+    permission_classes = [IsAdminUser]
+    
+    def get_object(self, pk):
+        try:
+            return CropKnowledgeBase.objects.get(pk=pk)
+        except CropKnowledgeBase.DoesNotExist:
+            return None
+    
+    def get(self, request, pk):
+        """Get single knowledge base entry"""
+        instance = self.get_object(pk)
+        if not instance:
+            return Response(
+                {'error': 'Knowledge base entry not found'},
+                status=status.HTTP_404_NOT_FOUND
+            )
+        
+        serializer = AdminKnowledgeBaseDetailSerializer(instance)
+        return Response(serializer.data)
+    
+    def put(self, request, pk):
+        """Update knowledge base entry"""
+        instance = self.get_object(pk)
+        if not instance:
+            return Response(
+                {'error': 'Knowledge base entry not found'},
+                status=status.HTTP_404_NOT_FOUND
+            )
+        
+        serializer = AdminKnowledgeBaseCreateUpdateSerializer(
+            instance, 
+            data=request.data, 
+            partial=True
+        )
+        if serializer.is_valid():
+            updated_instance = serializer.save()
+            
+            # Log the action
+            AdminLog.objects.create(
+                admin_user=request.user,
+                action='UPDATE',
+                model_name='KnowledgeBase',
+                object_id=str(instance.id),
+                object_repr=instance.name_en,
+                changes={'updated_fields': list(request.data.keys())},
+                ip_address=request.META.get('REMOTE_ADDR'),
+                user_agent=request.META.get('HTTP_USER_AGENT', '')
+            )
+            
+            detail_serializer = AdminKnowledgeBaseDetailSerializer(updated_instance)
+            return Response(detail_serializer.data)
+        
+        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+    
+    def delete(self, request, pk):
+        """Delete knowledge base entry"""
+        instance = self.get_object(pk)
+        if not instance:
+            return Response(
+                {'error': 'Knowledge base entry not found'},
+                status=status.HTTP_404_NOT_FOUND
+            )
+        
+        name = instance.name_en
+        instance.delete()
+        
+        # Log the action
+        AdminLog.objects.create(
+            admin_user=request.user,
+            action='DELETE',
+            model_name='KnowledgeBase',
+            object_id=str(pk),
+            object_repr=name,
+            ip_address=request.META.get('REMOTE_ADDR'),
+            user_agent=request.META.get('HTTP_USER_AGENT', '')
+        )
+        
+        return Response(
+            {'message': f'Knowledge base entry "{name}" deleted successfully'},
+            status=status.HTTP_200_OK
+        )
+
+
+class KnowledgeBaseBulkActionView(APIView):
+    """
+    POST /api/admin/knowledge-base/bulk-action/
+    Perform bulk actions on knowledge base entries
+    """
+    permission_classes = [IsAdminUser]
+    
+    def post(self, request):
+        ids = request.data.get('ids', [])
+        action = request.data.get('action')
+        
+        if not ids:
+            return Response(
+                {'error': 'No IDs provided'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        
+        if not action:
+            return Response(
+                {'error': 'Action is required'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        
+        # Get entries
+        queryset = CropKnowledgeBase.objects.filter(id__in=ids)
+        count = queryset.count()
+        
+        if count == 0:
+            return Response(
+                {'error': 'No matching entries found'},
+                status=status.HTTP_404_NOT_FOUND
+            )
+        
+        # Perform action
+        if action == 'delete':
+            names = list(queryset.values_list('name_en', flat=True))
+            queryset.delete()
+            message = f'Successfully deleted {count} entries'
+        
+        elif action == 'export':
+            return self.export_entries(queryset)
+        
+        else:
+            return Response(
+                {'error': f'Invalid action: {action}. Valid actions: delete, export'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        
+        # Log the action
+        AdminLog.objects.create(
+            admin_user=request.user,
+            action=f'BULK_{action.upper()}',
+            model_name='KnowledgeBase',
+            changes={
+                'action': action,
+                'count': count,
+                'ids': ids,
+                'names': names if action == 'delete' else []
+            },
+            ip_address=request.META.get('REMOTE_ADDR'),
+            user_agent=request.META.get('HTTP_USER_AGENT', '')
+        )
+        
+        return Response({
+            'message': message,
+            'count': count
+        })
+    
+    def export_entries(self, queryset):
+        """Export entries to CSV"""
+        response = HttpResponse(content_type='text/csv')
+        response['Content-Disposition'] = 'attachment; filename="knowledge_base_export.csv"'
+        
+        writer = csv.writer(response)
+        writer.writerow([
+            'ID', 'Name (English)', 'Name (Nepali)', 'Category',
+            'Best Season', 'Other Seasons', 'Temperature Min (°C)', 
+            'Temperature Max (°C)', 'Temperature Ideal (°C)',
+            'Soil Ideal', 'Soil Other', 'pH Min', 'pH Max', 'pH Ideal',
+            'Water Requirement', 'Water Logging Tolerance',
+            'Drought Tolerance', 'Frost Sensitive',
+            'Suitable Regions', 'Labor Requirement', 'Storage Life',
+            'N Need (kg/ha)', 'P Need (kg/ha)', 'K Need (kg/ha)',
+            'Growing Days', 'Altitude Min', 'Altitude Max',
+            'Day Length Sensitive', 'Day Length Type'
+        ])
+        
+        for item in queryset:
+            writer.writerow([
+                item.id, item.name_en, item.name_np, item.category,
+                item.best_season, item.other_seasons,
+                item.temp_min, item.temp_max, item.temp_ideal,
+                item.soil_ideal, item.soil_other,
+                item.ph_min, item.ph_max, item.ph_ideal,
+                item.water_req, item.water_logging_tolerance,
+                item.drought_tolerance, item.frost_sensitive,
+                item.region_suitable, item.labor_req, item.storage_life,
+                item.n_need, item.p_need, item.k_need,
+                item.growing_days, item.altitude_min, item.altitude_max,
+                'Yes' if item.day_length_sensitive else 'No', 
+                item.day_length_type or ''
+            ])
+        
+        return response
+
+
+class KnowledgeBaseExportView(APIView):
+    """
+    GET /api/admin/knowledge-base/export/
+    Export all knowledge base data
+    """
+    permission_classes = [IsAdminUser]
+    
+    def get(self, request):
+        format_type = request.query_params.get('format', 'csv')
+        queryset = CropKnowledgeBase.objects.all().order_by('name_en')
+        
+        # Apply filters if provided
+        category = request.query_params.get('category')
+        if category:
+            queryset = queryset.filter(category=category)
+        
+        season = request.query_params.get('season')
+        if season:
+            queryset = queryset.filter(
+                Q(best_season=season) |
+                Q(other_seasons__icontains=season)
+            )
+        
+        if format_type == 'csv':
+            return self.export_csv(queryset)
+        elif format_type == 'excel':
+            return self.export_excel(queryset)
+        else:
+            return Response(
+                {'error': 'Invalid format. Use "csv" or "excel"'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+    
+    def export_csv(self, queryset):
+        response = HttpResponse(content_type='text/csv')
+        response['Content-Disposition'] = 'attachment; filename="knowledge_base_export.csv"'
+        
+        writer = csv.writer(response)
+        writer.writerow([
+            'ID', 'Name (English)', 'Name (Nepali)', 'Category',
+            'Best Season', 'Other Seasons', 'Temperature Min (°C)', 
+            'Temperature Max (°C)', 'Temperature Ideal (°C)',
+            'Soil Ideal', 'Soil Other', 'pH Min', 'pH Max', 'pH Ideal',
+            'Water Requirement', 'Water Logging Tolerance',
+            'Drought Tolerance', 'Frost Sensitive',
+            'Suitable Regions', 'Labor Requirement', 'Storage Life',
+            'N Need (kg/ha)', 'P Need (kg/ha)', 'K Need (kg/ha)',
+            'Growing Days', 'Altitude Min', 'Altitude Max',
+            'Day Length Sensitive', 'Day Length Type'
+        ])
+        
+        for item in queryset:
+            writer.writerow([
+                item.id, item.name_en, item.name_np, item.category,
+                item.best_season, item.other_seasons,
+                item.temp_min, item.temp_max, item.temp_ideal,
+                item.soil_ideal, item.soil_other,
+                item.ph_min, item.ph_max, item.ph_ideal,
+                item.water_req, item.water_logging_tolerance,
+                item.drought_tolerance, item.frost_sensitive,
+                item.region_suitable, item.labor_req, item.storage_life,
+                item.n_need, item.p_need, item.k_need,
+                item.growing_days, item.altitude_min, item.altitude_max,
+                'Yes' if item.day_length_sensitive else 'No', 
+                item.day_length_type or ''
+            ])
+        
+        return response
+    
+    def export_excel(self, queryset):
+        wb = Workbook()
+        ws = wb.active
+        ws.title = "Knowledge Base"
+        
+        headers = [
+            'ID', 'Name (English)', 'Name (Nepali)', 'Category',
+            'Best Season', 'Other Seasons', 'Temperature Min (°C)', 
+            'Temperature Max (°C)', 'Temperature Ideal (°C)',
+            'Soil Ideal', 'Soil Other', 'pH Min', 'pH Max', 'pH Ideal',
+            'Water Requirement', 'Water Logging Tolerance',
+            'Drought Tolerance', 'Frost Sensitive',
+            'Suitable Regions', 'Labor Requirement', 'Storage Life',
+            'N Need (kg/ha)', 'P Need (kg/ha)', 'K Need (kg/ha)',
+            'Growing Days', 'Altitude Min', 'Altitude Max',
+            'Day Length Sensitive', 'Day Length Type'
+        ]
+        ws.append(headers)
+        
+        for item in queryset:
+            ws.append([
+                str(item.id), item.name_en, item.name_np, item.category,
+                item.best_season, item.other_seasons,
+                item.temp_min, item.temp_max, item.temp_ideal,
+                item.soil_ideal, item.soil_other,
+                item.ph_min, item.ph_max, item.ph_ideal,
+                item.water_req, item.water_logging_tolerance,
+                item.drought_tolerance, item.frost_sensitive,
+                item.region_suitable, item.labor_req, item.storage_life,
+                item.n_need, item.p_need, item.k_need,
+                item.growing_days, item.altitude_min, item.altitude_max,
+                'Yes' if item.day_length_sensitive else 'No', 
+                item.day_length_type or ''
+            ])
+        
+        response = HttpResponse(
+            content_type='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
+        )
+        response['Content-Disposition'] = 'attachment; filename="knowledge_base_export.xlsx"'
+        wb.save(response)
+        
+        return response
+
+
+class KnowledgeBaseOptionsView(APIView):
+    """
+    GET /api/admin/knowledge-base/options/
+    Get filter options for dropdowns
+    """
+    permission_classes = [IsAdminUser]
+    
+    def get(self, request):
+        # Get all unique categories
+        categories = CropKnowledgeBase.objects.values_list(
+            'category', flat=True
+        ).distinct().order_by('category')
+        
+        category_display = dict(CropKnowledgeBase.CATEGORY_CHOICES)
+        category_options = [
+            {'value': cat, 'label': category_display.get(cat, cat)}
+            for cat in categories
+        ]
+        
+        # Get all unique seasons
+        seasons = CropKnowledgeBase.objects.values_list(
+            'best_season', flat=True
+        ).distinct().order_by('best_season')
+        
+        season_display = dict(CropKnowledgeBase.SEASON_CHOICES)
+        season_options = [
+            {'value': season, 'label': season_display.get(season, season)}
+            for season in seasons
+        ]
+        
+        # Get all unique drought tolerance values
+        drought_options = [
+            {'value': 'low', 'label': 'Low'},
+            {'value': 'medium', 'label': 'Medium'},
+            {'value': 'high', 'label': 'High'}
+        ]
+        
+        # Frost sensitivity options
+        frost_options = [
+            {'value': 'yes', 'label': 'Yes (Frost kills it)'},
+            {'value': 'no', 'label': 'No (Tolerant)'},
+            {'value': 'tolerant', 'label': 'Tolerant (May survive light frost)'}
+        ]
+        
+        # Water requirement options
+        water_options = [
+            {'value': 'low', 'label': 'Low'},
+            {'value': 'medium', 'label': 'Medium'},
+            {'value': 'high', 'label': 'High'}
+        ]
+        
+        return Response({
+            'categories': category_options,
+            'seasons': season_options,
+            'drought_tolerance': drought_options,
+            'frost_sensitive': frost_options,
+            'water_req': water_options
         })

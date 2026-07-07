@@ -1,6 +1,7 @@
 from django.urls import path
 from . import views
 
+
 urlpatterns = [
     # Authentication
     path('auth/login/', views.AdminLoginView.as_view(), name='admin-login'),
@@ -60,12 +61,23 @@ urlpatterns = [
     path('reports/generate/', views.ReportGenerationView.as_view(), name='generate-report'),
     path('reports/history/', views.ReportHistoryView.as_view(), name='report-history'),
     path('reports/<int:report_id>/', views.ReportHistoryView.as_view(), name='report-delete'),
+    path('reports/stats/', views.ReportStatsView.as_view(), name='report-stats'),
+    path('reports/<int:report_id>/download/', views.ReportDownloadView.as_view(), name='report-download'),
+    
     
     # Analytics
     path('analytics/user-growth/', views.UserGrowthAnalyticsView.as_view(), name='user-growth'),
     path('analytics/geographic/', views.GeographicDistributionView.as_view(), name='geographic'),
     path('analytics/platform-usage/', views.PlatformUsageAnalyticsView.as_view(), name='platform-usage'),
     path('analytics/revenue-by-region/', views.RevenueByRegionView.as_view(), name='revenue-by-region'),
+    
+    
+    # Knowledge Base Admin Endpoints
+     path('knowledge-base/', views.KnowledgeBaseListView.as_view(), name='admin-kb-list'),
+    path('knowledge-base/<int:pk>/', views.KnowledgeBaseDetailView.as_view(), name='admin-kb-detail'),
+    path('knowledge-base/bulk-action/', views.KnowledgeBaseBulkActionView.as_view(), name='admin-kb-bulk-action'),
+    path('knowledge-base/export/', views.KnowledgeBaseExportView.as_view(), name='admin-kb-export'),
+    path('knowledge-base/options/', views.KnowledgeBaseOptionsView.as_view(), name='admin-kb-options'),
     
     # Admin Logs
     path('logs/', views.AdminLogsView.as_view(), name='admin-logs'),

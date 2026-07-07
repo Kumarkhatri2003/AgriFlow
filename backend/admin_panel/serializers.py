@@ -346,23 +346,119 @@ class BreedingRecordAdminSerializer(serializers.ModelSerializer):
 # ==================== NOTIFICATION SERIALIZERS ====================
 
 class NotificationSerializer(serializers.ModelSerializer):
-    sent_by_name = serializers.CharField(source='sent_by.get_full_name', read_only=True)
+    """Serializer for admin notifications"""
+    
+    sent_by_name = serializers.SerializerMethodField()
+    target_farmer_count = serializers.SerializerMethodField()
     
     class Meta:
         model = Notification
-        fields = '__all__'
-        read_only_fields = ['id', 'sent_by', 'sent_at']
+        fields = [
+            'id',
+            'title',
+            'title_np',  # ✅ Add this - Nepali title
+            'message',
+            'message_np',  # ✅ Add this - Nepali message
+            'notification_type',
+            'priority',
+            'target_type',
+            'target_crop',
+            'target_livestock',
+            'target_region',
+            'target_district',
+            'target_farmers',
+            'sent_by',
+            'sent_by_name',
+            'sent_at',
+            'is_read',
+            'read_at',
+            'target_farmer_count',
+        ]
+    
+    def get_sent_by_name(self, obj):
+        if obj.sent_by:
+            return obj.sent_by.get_full_name() or obj.sent_by.username
+        return 'System Admin'
+    
+    def get_target_farmer_count(self, obj):
+        return obj.target_farmers.count()
 
+# admin_panel/serializers.py
 
 class SendNotificationSerializer(serializers.Serializer):
+    TARGET_TYPE_CHOICES = [
+        ('all', 'All Farmers'),
+        ('individual', 'Specific Farmers'),
+        ('crop', 'Farmers of Specific Crops'),
+        ('livestock', 'Farmers of Specific Livestock'),
+        ('region', 'Farmers of Specific Regions'),
+        ('district', 'Farmers of Specific Districts'),
+    ]
+
+    # English fields
     title = serializers.CharField(max_length=255)
     message = serializers.CharField(max_length=None)
+    
+    # Nepali fields - Add these
+    title_np = serializers.CharField(max_length=255, required=False, allow_blank=True, default='')
+    message_np = serializers.CharField(max_length=None, required=False, allow_blank=True, default='')
+    
+    # Notification settings
     notification_type = serializers.ChoiceField(choices=Notification.NOTIFICATION_TYPES)
-    priority = serializers.ChoiceField(choices=Notification.PRIORITY_CHOICES, required=False)
-    target_farmers = serializers.ListField(child=serializers.IntegerField(), required=False)
+    priority = serializers.ChoiceField(choices=Notification.PRIORITY_CHOICES, required=False, default='medium')
+    target_type = serializers.ChoiceField(choices=TARGET_TYPE_CHOICES, default='all')
+    target_farmers = serializers.ListField(child=serializers.IntegerField(), required=False, default=list)
+    target_crop = serializers.CharField(max_length=100, required=False, allow_blank=True, default='')
+    target_livestock = serializers.CharField(max_length=100, required=False, allow_blank=True, default='')
+    target_region = serializers.CharField(max_length=100, required=False, allow_blank=True, default='')
+    target_district = serializers.CharField(max_length=100, required=False, allow_blank=True, default='')
     send_email = serializers.BooleanField(default=False)
 
-
+    def validate(self, data):
+        """Validate that required fields are present based on target type"""
+        target_type = data.get('target_type', 'all')
+        
+        # Validate target_farmers for individual targeting
+        if target_type == 'individual':
+            target_farmers = data.get('target_farmers', [])
+            if not target_farmers or len(target_farmers) == 0:
+                raise serializers.ValidationError({
+                    'target_farmers': 'At least one farmer must be selected for individual targeting'
+                })
+        
+        # Validate target_crop for crop targeting
+        if target_type == 'crop':
+            target_crop = data.get('target_crop', '')
+            if not target_crop or not target_crop.strip():
+                raise serializers.ValidationError({
+                    'target_crop': 'Crop name is required for crop-based targeting'
+                })
+        
+        # Validate target_livestock for livestock targeting
+        if target_type == 'livestock':
+            target_livestock = data.get('target_livestock', '')
+            if not target_livestock or not target_livestock.strip():
+                raise serializers.ValidationError({
+                    'target_livestock': 'Livestock type is required for livestock-based targeting'
+                })
+        
+        # Validate target_region for region targeting
+        if target_type == 'region':
+            target_region = data.get('target_region', '')
+            if not target_region or not target_region.strip():
+                raise serializers.ValidationError({
+                    'target_region': 'Region is required for region-based targeting'
+                })
+        
+        # Validate target_district for district targeting
+        if target_type == 'district':
+            target_district = data.get('target_district', '')
+            if not target_district or not target_district.strip():
+                raise serializers.ValidationError({
+                    'target_district': 'District is required for district-based targeting'
+                })
+        
+        return data
 # ==================== SYSTEM SETTINGS SERIALIZERS ====================
 
 class SystemSettingSerializer(serializers.ModelSerializer):
@@ -522,3 +618,164 @@ class FarmerListSerializer(serializers.ModelSerializer):
         elif not obj.is_email_verified:
             return 'Pending'
         return 'Active'
+    
+class AdminKnowledgeBaseListSerializer(serializers.ModelSerializer):
+    """Lightweight serializer for list view"""
+    
+    category_display = serializers.CharField(source='get_category_display', read_only=True)
+    best_season_display = serializers.CharField(source='get_best_season_display', read_only=True)
+    water_req_display = serializers.CharField(source='get_water_req_display', read_only=True)
+    drought_tolerance_display = serializers.CharField(source='get_drought_tolerance_display', read_only=True)
+    frost_sensitive_display = serializers.CharField(source='get_frost_sensitive_display', read_only=True)
+    
+    class Meta:
+        model = CropKnowledgeBase
+        fields = [
+            'id', 'name_en', 'name_np', 'category', 'category_display',
+            'best_season', 'best_season_display', 'temp_min', 'temp_max',
+            'water_req', 'water_req_display', 'drought_tolerance', 
+            'drought_tolerance_display', 'frost_sensitive', 'frost_sensitive_display',
+            'growing_days', 'created_at', 'updated_at'
+        ]
+
+
+class AdminKnowledgeBaseDetailSerializer(serializers.ModelSerializer):
+    """Full serializer for detail/edit view"""
+    
+    # Display fields
+    category_display = serializers.CharField(source='get_category_display', read_only=True)
+    best_season_display = serializers.CharField(source='get_best_season_display', read_only=True)
+    water_req_display = serializers.CharField(source='get_water_req_display', read_only=True)
+    drought_tolerance_display = serializers.CharField(source='get_drought_tolerance_display', read_only=True)
+    frost_sensitive_display = serializers.CharField(source='get_frost_sensitive_display', read_only=True)
+    labor_req_display = serializers.CharField(source='get_labor_req_display', read_only=True)
+    storage_life_display = serializers.CharField(source='get_storage_life_display', read_only=True)
+    
+    # Helper fields
+    other_seasons_list = serializers.SerializerMethodField()
+    regions_suitable_list = serializers.SerializerMethodField()
+    acceptable_soils_list = serializers.SerializerMethodField()
+    
+    class Meta:
+        model = CropKnowledgeBase
+        fields = [
+            'id', 'name_en', 'name_np', 'category', 'category_display',
+            'best_season', 'best_season_display', 'other_seasons', 'other_seasons_list',
+            'temp_min', 'temp_max', 'temp_ideal',
+            'soil_ideal', 'soil_other', 'acceptable_soils_list',
+            'ph_min', 'ph_max', 'ph_ideal',
+            'water_req', 'water_req_display', 'water_logging_tolerance',
+            'drought_tolerance', 'drought_tolerance_display',
+            'frost_sensitive', 'frost_sensitive_display',
+            'region_suitable', 'regions_suitable_list',
+            'labor_req', 'labor_req_display',
+            'storage_life', 'storage_life_display',
+            'n_need', 'p_need', 'k_need',
+            'growing_days', 'altitude_min', 'altitude_max',
+            'day_length_sensitive', 'day_length_type',
+            'created_at', 'updated_at'
+        ]
+        read_only_fields = ['id', 'created_at', 'updated_at']
+    
+    def get_other_seasons_list(self, obj):
+        if obj.other_seasons:
+            return [s.strip() for s in obj.other_seasons.split(',') if s.strip()]
+        return []
+    
+    def get_regions_suitable_list(self, obj):
+        if obj.region_suitable:
+            return [r.strip() for r in obj.region_suitable.split(',') if r.strip()]
+        return []
+    
+    def get_acceptable_soils_list(self, obj):
+        if obj.soil_other:
+            return [s.strip() for s in obj.soil_other.split(',') if s.strip()]
+        return []
+    
+    def validate(self, data):
+        """Cross-field validation"""
+        errors = {}
+        
+        # Validate temperature ranges
+        if 'temp_min' in data and 'temp_max' in data:
+            if data['temp_min'] >= data['temp_max']:
+                errors['temp_min'] = "Minimum temperature must be less than maximum temperature"
+        
+        # Validate pH ranges
+        if 'ph_min' in data and 'ph_max' in data:
+            if data['ph_min'] >= data['ph_max']:
+                errors['ph_min'] = "Minimum pH must be less than maximum pH"
+        
+        # Validate NPK values
+        for field in ['n_need', 'p_need', 'k_need']:
+            if field in data and data[field] is not None and data[field] < 0:
+                errors[field] = f"{field.upper()} requirement cannot be negative"
+        
+        if errors:
+            raise serializers.ValidationError(errors)
+        
+        return data
+
+
+class AdminKnowledgeBaseCreateUpdateSerializer(serializers.ModelSerializer):
+    """Serializer for create and update operations"""
+    
+    class Meta:
+        model = CropKnowledgeBase
+        fields = [
+            'name_en', 'name_np', 'category',
+            'best_season', 'other_seasons',
+            'temp_min', 'temp_max', 'temp_ideal',
+            'soil_ideal', 'soil_other',
+            'ph_min', 'ph_max', 'ph_ideal',
+            'water_req', 'water_logging_tolerance',
+            'drought_tolerance',
+            'frost_sensitive',
+            'region_suitable',
+            'labor_req',
+            'storage_life',
+            'n_need', 'p_need', 'k_need',
+            'growing_days', 'altitude_min', 'altitude_max',
+            'day_length_sensitive', 'day_length_type'
+        ]
+    
+    def validate(self, data):
+        """Cross-field validation"""
+        errors = {}
+        
+        # Validate name_en uniqueness
+        if 'name_en' in data:
+            instance = getattr(self, 'instance', None)
+            if instance:
+                # Update case
+                exists = CropKnowledgeBase.objects.filter(
+                    name_en__iexact=data['name_en']
+                ).exclude(id=instance.id).exists()
+            else:
+                # Create case
+                exists = CropKnowledgeBase.objects.filter(
+                    name_en__iexact=data['name_en']
+                ).exists()
+            
+            if exists:
+                errors['name_en'] = f"Crop '{data['name_en']}' already exists in knowledge base"
+        
+        # Validate temperature ranges
+        if 'temp_min' in data and 'temp_max' in data:
+            if data['temp_min'] >= data['temp_max']:
+                errors['temp_min'] = "Minimum temperature must be less than maximum temperature"
+        
+        # Validate pH ranges
+        if 'ph_min' in data and 'ph_max' in data:
+            if data['ph_min'] >= data['ph_max']:
+                errors['ph_min'] = "Minimum pH must be less than maximum pH"
+        
+        # Validate altitude ranges
+        if 'altitude_min' in data and 'altitude_max' in data:
+            if data['altitude_min'] >= data['altitude_max']:
+                errors['altitude_min'] = "Minimum altitude must be less than maximum altitude"
+        
+        if errors:
+            raise serializers.ValidationError(errors)
+        
+        return data
