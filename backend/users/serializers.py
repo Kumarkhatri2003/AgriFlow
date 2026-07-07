@@ -19,9 +19,9 @@ class UserSerializer(serializers.ModelSerializer):
         fields = (
             'id', 'email', 'username', 'full_name', 
             'phone', 'location', 'profile_picture',
-            'is_farmer', 'is_email_verified', 'created_at'
+            'is_farmer', 'is_admin', 'is_email_verified', 'created_at'
         )
-        read_only_fields = ('id', 'is_email_verified', 'created_at')
+        read_only_fields = ('id', 'is_admin', 'is_email_verified', 'created_at')
     
     def get_full_name(self, obj):
         return f"{obj.first_name} {obj.last_name}".strip() or obj.username
@@ -38,7 +38,7 @@ class UserProfileSerializer(serializers.ModelSerializer):
         model = User
         fields = (
             'id', 'email', 'username',
-            'is_farmer', 'is_email_verified', 'created_at',
+            'is_farmer', 'is_admin', 'is_email_verified', 'created_at',
             
             # Updateable fields
             'full_name', 'gender_display', 'region_display',
@@ -52,7 +52,7 @@ class UserProfileSerializer(serializers.ModelSerializer):
             'farm_village', 'farm_municipality', 'farm_district', 'farm_province', 'farm_ward_number',
             'farm_altitude', 'farm_soil_type', 'water_source', 
         )
-        read_only_fields = ('id', 'email', 'username', 'is_email_verified', 'created_at')
+        read_only_fields = ('id', 'email', 'username', 'is_admin', 'is_email_verified', 'created_at')
         
     def get_full_name(self, obj):
         return f"{obj.first_name} {obj.last_name}".strip() or obj.username
@@ -383,7 +383,7 @@ class RegisterSerializer(serializers.ModelSerializer):
         # Validate geographical region
         region = attrs.get('geographical_region')
         if region:
-            valid_regions = ['terai', 'hilly', 'mountain', 'kathmandu_valley']
+            valid_regions = ['terai', 'hilly', 'himalayan', 'kathmandu_valley']
             if region.lower() not in valid_regions:
                 raise serializers.ValidationError({
                     "geographical_region": f"Invalid region. Choose from: {', '.join(valid_regions)}"

@@ -102,8 +102,7 @@ AgriFlow Team
     email.attach_alternative(html_content, "text/html")
     email.send()
     
-    print(f"✅ Verification email sent to {user.email}")
-    print(f"🔗 Verification link: {verification_url}")
+    
 
 def send_password_reset_email(user, request=None):
     """Send password reset link"""
@@ -197,5 +196,3 @@ AgriFlow Team
     email.attach_alternative(html_content, "text/html")
     email.send()
     
-    print(f"✅ Password reset email sent to {user.email}")
-    print(f"🔗 Reset link: {reset_url}")
