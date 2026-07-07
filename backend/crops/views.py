@@ -553,32 +553,69 @@ class CropTypeConfigListView(generics.ListCreateAPIView):
     """
     queryset = CropTypeConfig.objects.all()
     serializer_class = CropTypeConfigSerializer
-    
+
     def get_permissions(self):
         if self.request.method == 'GET':
             return [IsAuthenticated()]
         return [IsAuthenticated(), PanelAdminUser()]
-    
+
     def get_queryset(self):
-        # Allow admins to see inactive configs, normal users only active
         is_admin = getattr(self.request.user, 'is_admin', False)
-        if is_admin:
-            queryset = CropTypeConfig.objects.all()
-        else:
-            queryset = CropTypeConfig.objects.filter(is_active=True)
-        
-        # Filter by crop_name
+        queryset = CropTypeConfig.objects.all() if is_admin else CropTypeConfig.objects.filter(is_active=True)
+
         crop_name = self.request.query_params.get('crop_name')
         if crop_name:
-            queryset = queryset.filter(crop_name__iexact=crop_name)
-        
-        # Filter by region
+            queryset = queryset.filter(crop_name__icontains=crop_name)
+
         region = self.request.query_params.get('region')
         if region:
             queryset = queryset.filter(region=region)
-        
-        return queryset
 
+        season = self.request.query_params.get('season')
+        if season:
+            queryset = queryset.filter(season=season)
+
+        is_active = self.request.query_params.get('is_active')
+        if is_active is not None and is_active != '':
+            queryset = queryset.filter(is_active=is_active.lower() == 'true')
+
+        return queryset.order_by('crop_name', 'variety')
+
+    def list(self, request, *args, **kwargs):
+        queryset = self.get_queryset()
+        total = queryset.count()
+
+        # Read pagination params
+        try:
+            page = max(1, int(request.query_params.get('page', 1)))
+        except (ValueError, TypeError):
+            page = 1
+
+        try:
+            page_size = max(1, min(100, int(request.query_params.get('page_size', 10))))
+        except (ValueError, TypeError):
+            page_size = 10
+
+        # Slice the queryset
+        start = (page - 1) * page_size
+        end = start + page_size
+        page_qs = queryset[start:end]
+
+        serializer = self.get_serializer(page_qs, many=True)
+
+        total_pages = (total + page_size - 1) // page_size  # ceiling division
+
+        return Response({
+            'data': serializer.data,
+            'pagination': {
+                'total': total,
+                'page': page,
+                'page_size': page_size,
+                'total_pages': total_pages,
+                'has_previous': page > 1,
+                'has_next': page < total_pages,
+            }
+        })
 
 class CropTypeConfigDetailView(generics.RetrieveUpdateDestroyAPIView):
     """

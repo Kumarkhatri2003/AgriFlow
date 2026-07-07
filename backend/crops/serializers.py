@@ -936,14 +936,14 @@ class CropTypeConfigSerializer(serializers.ModelSerializer):
             'total_growing_days', 'is_active'
         ]
         
-        def get_display_name(self, obj):
-            return obj.get_display_name()
-    
-        def get_region_display(self, obj):
-            return obj.get_region_display()
-    
-        def get_season_display(self, obj):
-            return obj.get_season_display()
+    def get_display_name(self, obj):
+        return obj.get_display_name()
+
+    def get_region_display(self, obj):
+        return obj.get_region_display()
+
+    def get_season_display(self, obj):
+        return obj.get_season_display()
         
 
 class CropActivityRuleSerializer(serializers.ModelSerializer):
