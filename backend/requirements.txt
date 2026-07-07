@@ -1,12 +1,48 @@
-Django==6.0.5
+# ─────────────────────────────────────────────────────────────────────────────
+# AgriFlow Backend — Python Dependencies
+# Install with:  pip install -r requirements.txt
+# ─────────────────────────────────────────────────────────────────────────────
+
+# ── Core Framework ────────────────────────────────────────────────────────────
+Django==6.0.2
+
+# ── REST API ──────────────────────────────────────────────────────────────────
 djangorestframework==3.16.1
-djangorestframework_simplejwt==5.5.1
-drf_spectacular==0.29.0
-drf_yasg==1.21.15
-openpyxl==3.1.5
+djangorestframework-simplejwt==5.5.1
+
+# ── API Documentation ─────────────────────────────────────────────────────────
+drf-spectacular==0.29.0
+drf-yasg==1.21.15
+
+# ── Authentication / Security ─────────────────────────────────────────────────
+PyJWT==2.11.0
+
+# ── Database ──────────────────────────────────────────────────────────────────
+psycopg2-binary==2.9.11
+
+# ── Cross-Origin Resource Sharing ─────────────────────────────────────────────
+django-cors-headers==4.9.0
+
+# ── Environment Variables ─────────────────────────────────────────────────────
 python-dotenv==1.2.2
+
+# ── Scheduled Jobs (cron) ─────────────────────────────────────────────────────
+django-apscheduler==0.7.0
+APScheduler==3.11.3
+
+# ── File Export / Reports ─────────────────────────────────────────────────────
+openpyxl==3.1.5
 reportlab==4.5.0
-Requests==2.34.2
-psycopg2-binary
-django-cors-headers
-django-apscheduler
+pillow==12.1.1
+
+# ── HTTP Client (weather API, external calls) ─────────────────────────────────
+requests==2.33.1
+
+# ── Timezone Support ──────────────────────────────────────────────────────────
+pytz==2026.1.post1
+tzdata==2025.3
+tzlocal==5.4.4
+
+# ── Async / WSGI / ASGI ───────────────────────────────────────────────────────
+asgiref==3.11.1
+sqlparse==0.5.5
