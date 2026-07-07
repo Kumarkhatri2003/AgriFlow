@@ -5,7 +5,7 @@ Livestock Alert Generator - Based on due dates (NO DUPLICATES)
 from datetime import date, timedelta
 from django.utils import timezone
 from notifications.action_priority import priority_from_days_until, PRE_ALERT_DAYS
-from notifications.utils import send_notification
+from notifications.utils import send_notification, archive_pending_notifications
 from notifications.models import Notification
 from notifications.i18n import ACTION_LABELS
 from .models import Animal, VaccinationRecord, HealthRecord
@@ -70,7 +70,7 @@ class LivestockAlertGenerator:
 
     @classmethod
     def _sent_today(cls, farmer, animal_id, alert_type):
-        """Avoid duplicate alerts on the same calendar day (daily escalation)."""
+        """Check if alert sent today for this animal and type."""
         title_search = cls.TITLE_KEYWORDS.get(alert_type, '')
         query = Notification.objects.filter(
             farmer=farmer,
@@ -108,54 +108,110 @@ class LivestockAlertGenerator:
             return f"🟡 {days_until} दिनमा: {animal_name} को लागि {activity_name}"
     
     @classmethod
-    def generate_vaccination_alert_for_record(cls, vax):
+    def generate_vaccination_alert_for_record(cls, vax, force=False):
         """Generate alert for a single vaccination record (CRUD-triggered)."""
         if not vax.next_due_date or vax.animal.status != 'active':
             return 0
+        
         today = date.today()
         days_until = (vax.next_due_date - today).days
+        
+        print(f"    🔍 Vaccination: {vax.vaccine_name}, days_until: {days_until}")
+        
         if not cls._in_alert_window('vaccination', days_until):
+            print(f"    ⏭️ SKIP: Outside alert window ({days_until})")
             return 0
+        
+        # ✅ Archive OLD notifications for this vaccine (regardless of due date)
+        # This handles date changes - removes old notifications
+        archived_count = archive_pending_notifications(
+            farmer=vax.animal.farmer,
+            source_id=str(vax.animal.id),
+            source_type='livestock',
+            title_icontains=vax.vaccine_name
+        )
+        if archived_count:
+            print(f"    🗑️ Archived {archived_count} old vaccination notifications")
+        
+        # ✅ Check if notification already exists for THIS due date
         if cls.notification_already_sent(
             vax.animal.farmer, vax.animal.id, 'vaccination', vax.next_due_date
         ):
             return 0
-        if cls._sent_today(vax.animal.farmer, vax.animal.id, 'vaccination'):
+        
+        # ✅ Skip _sent_today check if force=True (for new records)
+        if not force and cls._sent_today(vax.animal.farmer, vax.animal.id, 'vaccination'):
+            print(f"    ⏭️ SKIP: Already sent today")
             return 0
+        
+        print(f"    ✅ Sending vaccination alert for: {vax.vaccine_name}")
         return cls._send_vaccination_alert(vax, days_until)
 
     @classmethod
-    def generate_pregnancy_alert_for_animal(cls, animal):
+    def generate_pregnancy_alert_for_animal(cls, animal, force=False):
         """Generate alert for a single pregnant animal (CRUD-triggered)."""
         if not animal.is_pregnant or not animal.expected_birth_date or animal.status != 'active':
             return 0
+        
         today = date.today()
         days_until = (animal.expected_birth_date - today).days
+        
         if not cls._in_alert_window('pregnancy', days_until):
             return 0
+        
+        # ✅ Archive OLD pregnancy notifications for this animal
+        archived_count = archive_pending_notifications(
+            farmer=animal.farmer,
+            source_id=str(animal.id),
+            source_type='livestock',
+            title_icontains='Birth Alert'
+        )
+        if archived_count:
+            print(f"    🗑️ Archived {archived_count} old pregnancy notifications")
+        
         if cls.notification_already_sent(
             animal.farmer, animal.id, 'pregnancy', animal.expected_birth_date
         ):
             return 0
-        if cls._sent_today(animal.farmer, animal.id, 'pregnancy'):
+        
+        # ✅ Skip _sent_today check if force=True
+        if not force and cls._sent_today(animal.farmer, animal.id, 'pregnancy'):
             return 0
+        
         return cls._send_pregnancy_alert(animal, days_until)
 
     @classmethod
-    def generate_health_alert_for_record(cls, record):
+    def generate_health_alert_for_record(cls, record, force=False):
         """Generate alert for a single health record (CRUD-triggered)."""
         if not record.follow_up_date or record.animal.status != 'active':
             return 0
+        
         today = date.today()
         days_until = (record.follow_up_date - today).days
+        
         if not cls._in_alert_window('health_followup', days_until):
             return 0
+        
+        # ✅ Archive OLD health notifications for this animal/diagnosis
+        # Use a more specific filter to avoid archiving wrong notifications
+        archived_count = archive_pending_notifications(
+            farmer=record.animal.farmer,
+            source_id=str(record.animal.id),
+            source_type='livestock',
+            title_icontains='Health Follow-up'
+        )
+        if archived_count:
+            print(f"    🗑️ Archived {archived_count} old health notifications")
+        
         if cls.notification_already_sent(
             record.animal.farmer, record.animal.id, 'health_followup', record.follow_up_date
         ):
             return 0
-        if cls._sent_today(record.animal.farmer, record.animal.id, 'health_followup'):
+        
+        # ✅ Skip _sent_today check if force=True
+        if not force and cls._sent_today(record.animal.farmer, record.animal.id, 'health_followup'):
             return 0
+        
         return cls._send_health_alert(record, days_until)
 
     @classmethod
@@ -163,7 +219,7 @@ class LivestockAlertGenerator:
         priority = cls.get_priority(days_until)
         activity_en = f"{vax.vaccine_name} vaccination"
         activity_np = f"{vax.vaccine_name} खोप"
-        send_notification(
+        notification = send_notification(
             farmer=vax.animal.farmer,
             title=f"💉 {vax.vaccine_name} Vaccination - {vax.animal.name}",
             title_np=f"💉 {vax.vaccine_name} खोप - {vax.animal.name}",
@@ -178,12 +234,13 @@ class LivestockAlertGenerator:
             action_label_np=ACTION_LABELS['np']['view_animal'],
             due_date=vax.next_due_date,
         )
+        print(f"    ✅ NEW notification sent (ID: {notification.id})")
         return 1
 
     @classmethod
     def _send_pregnancy_alert(cls, animal, days_until):
         priority = cls.get_priority(days_until)
-        send_notification(
+        notification = send_notification(
             farmer=animal.farmer,
             title=f"🐄 Birth Alert - {animal.name}",
             title_np=f"🐄 प्रसव सतर्कता - {animal.name}",
@@ -198,12 +255,13 @@ class LivestockAlertGenerator:
             action_label_np=ACTION_LABELS['np']['view_animal'],
             due_date=animal.expected_birth_date,
         )
+        print(f"    ✅ NEW notification sent (ID: {notification.id})")
         return 1
 
     @classmethod
     def _send_health_alert(cls, record, days_until):
         priority = cls.get_priority(days_until)
-        send_notification(
+        notification = send_notification(
             farmer=record.animal.farmer,
             title=f"🏥 Health Follow-up - {record.animal.name}",
             title_np=f"🏥 स्वास्थ्य पुन: जाँच - {record.animal.name}",
@@ -224,11 +282,12 @@ class LivestockAlertGenerator:
             action_label_np=ACTION_LABELS['np']['view_animal'],
             due_date=record.follow_up_date,
         )
+        print(f"    ✅ NEW notification sent (ID: {notification.id})")
         return 1
     
     @classmethod
-    def generate_vaccination_alerts(cls, farmer=None):
-        """Generate alerts for upcoming/overdue vaccinations (NO DUPLICATES)"""
+    def generate_vaccination_alerts(cls, farmer=None, force=False):
+        """Generate alerts for upcoming/overdue vaccinations."""
         today = date.today()
         alerts_count = 0
         
@@ -247,16 +306,15 @@ class LivestockAlertGenerator:
             
             if cls._in_alert_window('vaccination', days_until):
                 print(f"  🐄 {vax.animal.name}: {vax.vaccine_name} due in {days_until} days")
-                count = cls.generate_vaccination_alert_for_record(vax)
+                count = cls.generate_vaccination_alert_for_record(vax, force=force)
                 if count:
                     alerts_count += count
-                    print(f"    ✅ NEW notification sent")
         
         return alerts_count
     
     @classmethod
-    def generate_pregnancy_alerts(cls, farmer=None):
-        """Generate alerts for upcoming/overdue births (NO DUPLICATES)"""
+    def generate_pregnancy_alerts(cls, farmer=None, force=False):
+        """Generate alerts for upcoming/overdue births."""
         today = date.today()
         alerts_count = 0
         
@@ -277,16 +335,15 @@ class LivestockAlertGenerator:
             
             if cls._in_alert_window('pregnancy', days_until):
                 print(f"  🐄 {animal.name}: birth due in {days_until} days")
-                count = cls.generate_pregnancy_alert_for_animal(animal)
+                count = cls.generate_pregnancy_alert_for_animal(animal, force=force)
                 if count:
                     alerts_count += count
-                    print(f"    ✅ NEW notification sent")
         
         return alerts_count
     
     @classmethod
-    def generate_health_followup_alerts(cls, farmer=None):
-        """Generate alerts for health checkup follow-ups (NO DUPLICATES)"""
+    def generate_health_followup_alerts(cls, farmer=None, force=False):
+        """Generate alerts for health checkup follow-ups."""
         today = date.today()
         alerts_count = 0
         
@@ -305,24 +362,28 @@ class LivestockAlertGenerator:
             
             if cls._in_alert_window('health_followup', days_until):
                 print(f"  🐄 {record.animal.name}: health follow-up due in {days_until} days")
-                count = cls.generate_health_alert_for_record(record)
+                count = cls.generate_health_alert_for_record(record, force=force)
                 if count:
                     alerts_count += count
-                    print(f"    ✅ NEW notification sent")
         
         return alerts_count
     
     @classmethod
-    def generate_all_alerts(cls, farmer=None):
-        """Generate all livestock alerts (NO DUPLICATES)"""
+    def generate_all_alerts(cls, farmer=None, force=False):
+        """Generate all livestock alerts."""
         print("=" * 50)
         print("🐄 LIVESTOCK ALERT GENERATOR")
         print("=" * 50)
         
+        if farmer:
+            print(f"👤 Generating alerts for: {farmer.username}")
+        if force:
+            print("🔧 Force mode: Bypassing 'sent today' duplicate check")
+        
         total = 0
-        total += cls.generate_vaccination_alerts(farmer=farmer)
-        total += cls.generate_pregnancy_alerts(farmer=farmer)
-        total += cls.generate_health_followup_alerts(farmer=farmer)
+        total += cls.generate_vaccination_alerts(farmer=farmer, force=force)
+        total += cls.generate_pregnancy_alerts(farmer=farmer, force=force)
+        total += cls.generate_health_followup_alerts(farmer=farmer, force=force)
         
         print("\n" + "=" * 50)
         print(f"✅ TOTAL ALERTS GENERATED: {total}")
