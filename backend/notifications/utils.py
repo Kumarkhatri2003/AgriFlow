@@ -24,20 +24,6 @@ def send_notification(
 ):
     """
     Create a notification for a farmer.
-    
-    Parameters:
-    - farmer: User object (the recipient)
-    - title: Short title of the notification
-    - message: Detailed message
-    - notification_type: 'livestock', 'crop', 'weather', 'admin'
-    - priority: 'critical', 'urgent', 'high', 'medium', 'low'
-    - source_id: ID of related object (crop.id or animal.id)
-    - source_type: Type of source ('crop', 'livestock')
-    - action_url: URL to navigate when clicked
-    - action_label: Text for action button
-    
-    Returns:
-    - Notification object
     """
     return Notification.objects.create(
         farmer=farmer,
@@ -56,7 +42,15 @@ def send_notification(
     )
 
 
-def send_bulk_notification(farmers, title, message, notification_type='admin', priority='medium'):
+def send_bulk_notification(
+    farmers,
+    title,
+    message,
+    notification_type='admin',
+    priority='medium',
+    title_np=None,
+    message_np=None,
+):
     """
     Send same notification to multiple farmers.
     """
@@ -67,6 +61,8 @@ def send_bulk_notification(farmers, title, message, notification_type='admin', p
                 farmer=farmer,
                 title=title,
                 message=message,
+                title_np=title_np or '',
+                message_np=message_np or '',
                 notification_type=notification_type,
                 priority=priority,
             )
@@ -74,20 +70,56 @@ def send_bulk_notification(farmers, title, message, notification_type='admin', p
     Notification.objects.bulk_create(notifications)
     return len(notifications)
 
+def get_unread_count(farmer, include_farm_alerts=False):
+    """
+    Get number of unread notifications for a farmer.
+    
+    Args:
+        farmer: User object
+        include_farm_alerts: If True, include crop/livestock alerts in count.
+                           Default False (only shows admin and weather).
+    """
+    queryset = Notification.objects.filter(farmer=farmer, is_read=False)
+    
+    # ✅ Exclude crop and livestock alerts by default
+    if not include_farm_alerts:
+        queryset = queryset.exclude(notification_type__in=['crop', 'livestock'])
+    
+    return queryset.count()
 
-def get_unread_count(farmer):
-    """Get number of unread notifications for a farmer"""
-    return Notification.objects.filter(farmer=farmer, is_read=False).count()
+
+def get_farm_alerts_unread_count(farmer):
+    """
+    Get unread count specifically for farm alerts (crop + livestock).
+    Used for the dashboard alert badges.
+    """
+    return Notification.objects.filter(
+        farmer=farmer,
+        is_read=False,
+        notification_type__in=['crop', 'livestock']
+    ).count()
 
 
-def get_all_notifications(farmer, limit=50):
-    """Get all notifications for a farmer (most recent first)"""
-    return Notification.objects.filter(farmer=farmer)[:limit]
+def get_all_notifications(farmer, limit=50, include_farm_alerts=False):
+    """
+    Get all notifications for a farmer (most recent first).
+    
+    Args:
+        farmer: User object
+        limit: Max number of notifications
+        include_farm_alerts: If True, include crop/livestock alerts.
+    """
+    queryset = Notification.objects.filter(farmer=farmer)
+    
+    if not include_farm_alerts:
+        queryset = queryset.exclude(notification_type__in=['crop', 'livestock'])
+    
+    return queryset[:limit]
 
 
-def get_recent_notifications(farmer, limit=20):
+def get_recent_notifications(farmer, limit=20, include_farm_alerts=False):
     """Get recent notifications for a farmer"""
-    return Notification.objects.filter(farmer=farmer)[:limit]
+    return get_all_notifications(farmer, limit, include_farm_alerts)
 
 
 def get_notifications_by_type(farmer, notification_type, limit=20):
@@ -98,22 +130,36 @@ def get_notifications_by_type(farmer, notification_type, limit=20):
     )[:limit]
 
 
-def get_high_priority_notifications(farmer):
+def get_high_priority_notifications(farmer, include_farm_alerts=False):
     """Get unread high priority notifications"""
-    return Notification.objects.filter(
+    queryset = Notification.objects.filter(
         farmer=farmer, 
         is_read=False,
         priority__in=['critical', 'urgent', 'high']
     )
+    
+    if not include_farm_alerts:
+        queryset = queryset.exclude(notification_type__in=['crop', 'livestock'])
+    
+    return queryset
 
 
-def mark_all_as_read(farmer):
-    """Mark all notifications as read for a farmer"""
+def mark_all_as_read(farmer, include_farm_alerts=False):
+    """
+    Mark all notifications as read for a farmer.
+    
+    Args:
+        farmer: User object
+        include_farm_alerts: If True, also mark crop/livestock alerts as read.
+    """
     from django.utils import timezone
-    count = Notification.objects.filter(farmer=farmer, is_read=False).update(
-        is_read=True, 
-        read_at=timezone.now()
-    )
+    
+    queryset = Notification.objects.filter(farmer=farmer, is_read=False)
+    
+    if not include_farm_alerts:
+        queryset = queryset.exclude(notification_type__in=['crop', 'livestock'])
+    
+    count = queryset.update(is_read=True, read_at=timezone.now())
     return count
 
 
@@ -128,11 +174,16 @@ def delete_old_notifications(days=30):
 
 def archive_pending_notifications(farmer, source_id=None, source_type=None, title_icontains=None):
     """
-    Mark incomplete notifications as completed when source data changes
-    or the related record is removed.
+    Mark incomplete notifications as completed AND delete completed ones 
+    when source data changes or the related record is removed.
+    This prevents duplicates when dates are changed.
     """
     from django.utils import timezone
-
+    
+    archived_count = 0
+    deleted_count = 0
+    
+    # Step 1: Archive incomplete notifications (mark as completed)
     qs = Notification.objects.filter(farmer=farmer, is_completed=False)
     if source_id is not None:
         qs = qs.filter(source_id=str(source_id))
@@ -140,7 +191,26 @@ def archive_pending_notifications(farmer, source_id=None, source_type=None, titl
         qs = qs.filter(source_type=source_type)
     if title_icontains:
         qs = qs.filter(title__icontains=title_icontains)
-    return qs.update(is_completed=True, completed_at=timezone.now())
+    
+    archived_count = qs.update(is_completed=True, completed_at=timezone.now())
+    
+    # Step 2: Delete completed notifications that match the criteria
+    delete_qs = Notification.objects.filter(farmer=farmer, is_completed=True)
+    if source_id is not None:
+        delete_qs = delete_qs.filter(source_id=str(source_id))
+    if source_type is not None:
+        delete_qs = delete_qs.filter(source_type=source_type)
+    if title_icontains:
+        delete_qs = delete_qs.filter(title__icontains=title_icontains)
+    
+    deleted_count, _ = delete_qs.delete()
+    
+    if archived_count:
+        print(f"    🗑️ Archived {archived_count} pending notifications")
+    if deleted_count:
+        print(f"    🗑️ Deleted {deleted_count} completed notifications")
+    
+    return archived_count + deleted_count
 
 
 def refresh_notification_priorities(farmer=None):

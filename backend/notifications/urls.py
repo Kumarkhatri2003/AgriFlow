@@ -1,29 +1,33 @@
 # notifications/urls.py
 
 from django.urls import path
-from .views import (
-    NotificationListView,
-    NotificationDetailView,
-    MarkAllReadView,
-    UnreadCountView,
-    GetFarmAlertsView,
-    MarkNotificationCompletedView,
-    MarkNotificationUncompletedView,
-)
+from rest_framework.routers import DefaultRouter
+from . import views
 
-urlpatterns = [
-    # Main endpoints
-    path('', NotificationListView.as_view(), name='notifications'),
-    path('unread-count/', UnreadCountView.as_view(), name='unread-count'),
-    path('mark-all-read/', MarkAllReadView.as_view(), name='mark-all-read'),
-    
-    # Individual notification
-    path('<int:notification_id>/', NotificationDetailView.as_view(), name='notification-detail'),
-    
-    # Farm alerts endpoint
-    path('farm-alerts/', GetFarmAlertsView.as_view(), name='farm-alerts'),
-    
-    # Complete/Uncomplete endpoints
-    path('<int:notification_id>/complete/', MarkNotificationCompletedView.as_view(), name='notification-complete'),
-    path('<int:notification_id>/uncomplete/', MarkNotificationUncompletedView.as_view(), name='notification-uncomplete'),
+# Router handles standard CRUD: list, retrieve, create, update, partial_update, destroy
+# and the router-generated action URLs like mark_all_read, unread_count etc.
+# config/urls.py mounts this at 'api/notifications/', so use empty prefix.
+router = DefaultRouter()
+router.register(r'', views.NotificationViewSet, basename='notification')
+
+# Explicit hyphenated URL aliases matching what the frontend calls
+# The DRF router generates underscore versions; these add hyphen aliases
+hyphen_urlpatterns = [
+    path('farm-alerts/', views.NotificationViewSet.as_view({'get': 'farm_alerts'}), name='notification-farm-alerts-hyphen'),
+    path('unread-count/', views.NotificationViewSet.as_view({'get': 'unread_count'}), name='notification-unread-count-hyphen'),
+    path('mark-all-read/', views.NotificationViewSet.as_view({'post': 'mark_all_read'}), name='notification-mark-all-read-hyphen'),
+    path('<int:pk>/mark-read/', views.NotificationViewSet.as_view({'post': 'mark_read'}), name='notification-mark-read-hyphen'),
+    path('<int:pk>/mark-unread/', views.NotificationViewSet.as_view({'post': 'mark_unread'}), name='notification-mark-unread-hyphen'),
+    path('<int:pk>/complete/', views.NotificationViewSet.as_view({'post': 'complete'}), name='notification-complete-hyphen'),
+    path('<int:pk>/uncomplete/', views.NotificationViewSet.as_view({'post': 'uncomplete'}), name='notification-uncomplete-hyphen'),
 ]
+
+# Admin notification URLs
+admin_urlpatterns = [
+    path('admin/notifications/', views.NotificationListCreateView.as_view(), name='admin-notification-list'),
+    path('admin/notifications/<int:id>/', views.AdminNotificationDetailView.as_view(), name='admin-notification-detail'),
+    path('admin/notifications/mark-all-read/', views.AdminMarkAllReadView.as_view(), name='admin-mark-all-read'),
+]
+
+# hyphen_urlpatterns MUST come before router.urls so they take precedence
+urlpatterns = hyphen_urlpatterns + router.urls + admin_urlpatterns
