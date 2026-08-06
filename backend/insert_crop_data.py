@@ -364,18 +364,18 @@ def insert_crop_configs():
             )
             if created:
                 created_count += 1
-                print(f"✅ Created: {obj.get_display_name()}")
+                print(f"Created: {obj.get_display_name()}")
             else:
                 skipped_count += 1
-                print(f"⏭️ Already exists: {obj.get_display_name()}")
+                print(f"⏭Already exists: {obj.get_display_name()}")
         except Exception as e:
-            print(f"❌ Error creating {config_data['crop_name']} - {config_data['variety']}: {e}")
+            print(f"Error creating {config_data['crop_name']} - {config_data['variety']}: {e}")
     
     print("\n" + "="*50)
-    print(f"📊 SUMMARY:")
-    print(f"   ✅ Created: {created_count} new configurations")
-    print(f"   ⏭️ Skipped: {skipped_count} existing configurations")
-    print(f"   📦 Total in DB: {CropTypeConfig.objects.count()}")
+    print(f"SUMMARY:")
+    print(f"   Created: {created_count} new configurations")
+    print(f"   ⏭Skipped: {skipped_count} existing configurations")
+    print(f"   Total in DB: {CropTypeConfig.objects.count()}")
     print("="*50)
 
 
@@ -3032,29 +3032,28 @@ def insert_activity_rules():
             )
             if created:
                 created_count += 1
-                print(f"✅ Created: {obj}")
+                print(f"Created: {obj}")
             else:
                 skipped_count += 1
         except Exception as e:
-            print(f"❌ Error creating activity for {activity['crop_config'].crop_name}: {e}")
+            print(f"Error creating activity for {activity['crop_config'].crop_name}: {e}")
     
     print("\n" + "="*50)
-    print(f"📊 ACTIVITY SUMMARY:")
-    print(f"   ✅ Created: {created_count} new activities")
-    print(f"   ⏭️ Skipped: {skipped_count} existing activities")
-    print(f"   📦 Total in DB: {CropActivityRule.objects.count()}")
+    print(f"ACTIVITY SUMMARY:")
+    print(f"   Created: {created_count} new activities")
+    print(f"   ⏭Skipped: {skipped_count} existing activities")
+    print(f"   Total in DB: {CropActivityRule.objects.count()}")
     print("="*50)
 
 if __name__ == "__main__":
-    print("🌾 Starting crop data insertion...")
+    print("Starting crop data insertion...")
     print("="*50)
     
     # Insert crop configurations
     insert_crop_configs()
     
-    print("\n" + "🌱" * 30)
     
     # Insert activity rules
     insert_activity_rules()
     
-    print("\n✅ Data insertion completed successfully!")
+    print("\nData insertion completed successfully!")
