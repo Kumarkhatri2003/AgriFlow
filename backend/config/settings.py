@@ -14,12 +14,12 @@ BASE_DIR = Path(__file__).resolve().parent.parent
 # See https://docs.djangoproject.com/en/6.0/howto/deployment/checklist/
 
 # SECURITY WARNING: keep the secret key used in production secret!
-SECRET_KEY = 'django-insecure-0*yre^g1rwk_$wczsk+2aw(51+d=k#v3($8*tox$6#doa4ozbl'
+SECRET_KEY = os.environ.get('SECRET_KEY', 'django-insecure-0*yre^g1rwk_$wczsk+2aw(51+d=k#v3($8*tox$6#doa4ozbl')
 
 # SECURITY WARNING: don't run with debug turned on in production!
-DEBUG = True
+DEBUG = os.environ.get('DEBUG', 'True') == 'True'
 
-ALLOWED_HOSTS = ['localhost', '127.0.0.1', 'testserver']
+ALLOWED_HOSTS = os.environ.get('ALLOWED_HOSTS', 'localhost,127.0.0.1,testserver').split(',')
 
 
 # Application definition
@@ -53,7 +53,7 @@ INSTALLED_APPS = [
     
 ]
 
-WEATHER_API_KEY = '2294c5bb5e5b4fb087432543262604'
+WEATHER_API_KEY = os.environ.get('WEATHER_API_KEY', '2294c5bb5e5b4fb087432543262604')
 
 
 CACHES ={
@@ -76,12 +76,10 @@ MIDDLEWARE = [
     'django.middleware.clickjacking.XFrameOptionsMiddleware',
 ]
 
-CORS_ALLOWED_ORIGINS = [
-    "http://localhost:3000",
-    "http://localhost:5173",   
-    "http://localhost:5174",   
-    "http://127.0.0.1:5173",
-]
+CORS_ALLOWED_ORIGINS = os.environ.get(
+    'CORS_ALLOWED_ORIGINS',
+    'http://localhost:3000,http://localhost:5173,http://localhost:5174,http://127.0.0.1:5173'
+).split(',')
 
 ROOT_URLCONF = 'config.urls'
 
@@ -110,11 +108,11 @@ WSGI_APPLICATION = 'config.wsgi.application'
 DATABASES = {
     'default': {
         'ENGINE': 'django.db.backends.postgresql',
-        'NAME':'agriflow_db',
-        'USER':'postgres',
-        'PASSWORD':'12345',
-        'HOST':'localhost',
-        'PORT':'5433',
+        'NAME': os.environ.get('DB_NAME', 'agriflow_db'),
+        'USER': os.environ.get('DB_USER', 'postgres'),
+        'PASSWORD': os.environ.get('DB_PASSWORD', '12345'),
+        'HOST': os.environ.get('DB_HOST', 'localhost'),
+        'PORT': os.environ.get('DB_PORT', '5433'),
     }
 }
 
@@ -218,7 +216,7 @@ SIMPLE_JWT = {
 }
 
 # CORS settings
-CORS_ALLOW_ALL_ORIGINS = True  # Only for development!
+CORS_ALLOW_ALL_ORIGINS = os.environ.get('CORS_ALLOW_ALL_ORIGINS', 'True') == 'True'
 CORS_ALLOW_CREDENTIALS = True
 
 
@@ -229,8 +227,21 @@ EMAIL_BACKEND = 'django.core.mail.backends.smtp.EmailBackend'
 EMAIL_HOST = 'smtp.gmail.com'
 EMAIL_PORT = 587
 EMAIL_USE_TLS = True
-EMAIL_HOST_USER = 'official.agriflow@gmail.com'  
-EMAIL_HOST_PASSWORD = 'ckff rlle vlml dhzz'
-DEFAULT_FROM_EMAIL = 'AgriFlow <official.agriflow@gmail.com>'
+EMAIL_HOST_USER = os.environ.get('EMAIL_HOST_USER', 'official.agriflow@gmail.com')  
+EMAIL_HOST_PASSWORD = os.environ.get('EMAIL_HOST_PASSWORD', 'ckff rlle vlml dhzz')
+DEFAULT_FROM_EMAIL = os.environ.get('DEFAULT_FROM_EMAIL', 'AgriFlow <official.agriflow@gmail.com>')
 # Frontend URL
 FRONTEND_URL = os.environ.get('FRONTEND_URL', 'http://localhost:3000')
+
+# Intercept and redirect print statements to logger in production (DEBUG=False)
+if not DEBUG:
+    import builtins
+    import logging
+    logger = logging.getLogger('django.production')
+    
+    def production_print(*args, **kwargs):
+        # Join arguments and log them under INFO
+        msg = " ".join(map(str, args))
+        logger.info(msg)
+        
+    builtins.print = production_print

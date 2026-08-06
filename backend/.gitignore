@@ -1,6 +1,5 @@
 # Python
 *.pyc
-<<<<<<< HEAD
 *.pyo
 *.pyd
 __pycache__/
@@ -37,12 +36,10 @@ Desktop.ini
 
 # Database backups / local dev DBs
 agriflow_db
+agriflow_ab
 *.bak
 
 # Node / Frontend (if you ever add npm/yarn)
 node_modules/
 dist/
 build/
-=======
-agriflow_ab
->>>>>>> 68c94a2 (chore: add full .gitignore for backend)

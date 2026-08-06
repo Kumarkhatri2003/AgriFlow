@@ -56,6 +56,9 @@ class NotificationGenerationTriggerTests(TestCase):
             planting_date=today - timedelta(days=14)
         )
         
+        # Clear the notifications generated automatically by the post_save signal on crop creation
+        Notification.objects.filter(farmer=self.user).delete()
+        
         self.assertIsNone(self.user.last_reminder_generation)
         self.assertEqual(Notification.objects.filter(farmer=self.user).count(), 0)
         
